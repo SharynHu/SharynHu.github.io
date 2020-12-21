@@ -21,7 +21,7 @@ A full convolutional neural network are made of:
 
 #### Stride
 
-<div align=center><img width="700" height="300" src="https://raw.githubusercontent.com/SharynHu/picBed/master/57EEC4CF-CCAE-474B-8227-7E6AB3D0E7F2.gif"/></div>
+<div align=center><img width="400" height="400" src="https://raw.githubusercontent.com/SharynHu/picBed/master/57EEC4CF-CCAE-474B-8227-7E6AB3D0E7F2.gif"/></div>
 <br>
 **Note:** A stride of 1 is equivalent to a standard convolution.
 
