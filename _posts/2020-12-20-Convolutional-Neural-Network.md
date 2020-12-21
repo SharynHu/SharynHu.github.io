@@ -32,7 +32,7 @@ A filter is actually a collection of kernals in general case.
 One kernal for one channel.
 For example:
 for an image that has 3 channels, a filter has 3 kernals per channel.
-<div align=center><img width="400" height="250" src="https://raw.githubusercontent.com/SharynHu/picBed/master/5D0EF5F7-4C9B-47B2-B142-268F211C69D6.gif"/></div>
+<div align=center><img width="300" height="150" src="https://raw.githubusercontent.com/SharynHu/picBed/master/5D0EF5F7-4C9B-47B2-B142-268F211C69D6.gif"/></div>
 
 Each of the per-channel processed versions are then summed together to form one channel. The kernels of a filter each produce one version of each channel, and the filter as a whole produces one overall output channel.
 
