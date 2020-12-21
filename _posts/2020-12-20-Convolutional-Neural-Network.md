@@ -40,7 +40,7 @@ Each of the per-channel processed versions are then summed together to form one 
 
 Finally, then there’s the bias term. The way the bias term works here is that each output filter has one bias term. The bias gets added to the output channel so far to produce the final output channel.
 
-<div align=center><img width="300" height="500" src="https://raw.githubusercontent.com/SharynHu/picBed/master/A46A9F9B-E39E-4827-9A86-ECED31387308.gif"/></div>
+<div align=center><img width="300" height="450" src="https://raw.githubusercontent.com/SharynHu/picBed/master/A46A9F9B-E39E-4827-9A86-ECED31387308.gif"/></div>
 
 So for each filter, it produces one output channel. outputs for all filters concatenated are the final multi-channeled output.
 
