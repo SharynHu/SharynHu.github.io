@@ -10,18 +10,19 @@
     </script>
 </head>
 ## Neuron
-<div align=center>
-<img width="400" height="200" src="https://raw.githubusercontent.com/SharynHu/picBed/master/65E72571-A911-4B44-8ED5-CC45183AC035.png"></img>
+<div align="center">
+<img width="400" height="200" src="https://raw.githubusercontent.com/SharynHu/picBed/master/65E72571-A911-4B44-8ED5-CC45183AC035.png"/>
 </div>
 ## Neural Network
 Neural networks is combining multiple neurons together.
 Below is the structure of a 2-layer neural network:
-<div align=center>
+<div align="center">
 <img width="400" height="200" src="https://raw.githubusercontent.com/SharynHu/picBed/master/B27A7ABB-D0F1-4953-93B2-8342635D7177.png"></img>
 </div>
 $a^{[0]}$ is the input layer, $a^{[1]}$ is the hidden layer, and $a^{[2]}$ is the output layer. For layer 1 the activation function is $g$ and for layer 2 the activation function is sigmoid. Parameter $w^{[1]}$ is a $4\times3$ matrix; parameter $b^{[1]}$ is a $4\times1$ vector.
 For layer 1 we have
-$$W^{[1]}=\left[
+
+$$ W^{[1]}=\left[
 \begin{matrix}
 w^{[1]T}_1\\
 w^{[1]T}_2\\
@@ -29,6 +30,7 @@ w^{[1]T}_3\\
 w^{[1]T}_4\\
 \end{matrix}
 \right]$$
+
 $$b^{[1]}=\left[
 \begin{matrix}
 b^{[1]}_1\\
