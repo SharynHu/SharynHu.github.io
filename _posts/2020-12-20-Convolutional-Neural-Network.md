@@ -13,7 +13,7 @@ A full convolutional neural network are made of:
 
 ## 2-D convolution
 
-<div align=center><img width="150" height="150" src="https://raw.githubusercontent.com/SharynHu/picBed/master/FBEB8B9C-513C-42DD-BA14-3ADC1E4C4144.gif"/></div>
+<div align=center><img width="600" height="400" src="https://raw.githubusercontent.com/SharynHu/picBed/master/FBEB8B9C-513C-42DD-BA14-3ADC1E4C4144.gif"/></div>
 
 ### Commonly used techniques
 #### Padding
