@@ -1,0 +1,4 @@
+theme: jekyll-theme-cayman
+name: Xiaojing Hu
+markdown: kramdown
+permalink: /blog/:year/:month/:day/:title
