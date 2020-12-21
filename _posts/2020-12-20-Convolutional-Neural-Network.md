@@ -1,4 +1,3 @@
-# Convolutional Neural Network
 ## What is a CNN made of
 A full convolutional neural network are made of:
 1. input layer
