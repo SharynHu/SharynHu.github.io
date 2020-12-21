@@ -12,24 +12,21 @@ We can spend our time figuring out how to decompose our scientific problem rathe
 ### Broadcast (one to many)
 One process has a piece of data and broadcasts it to many or all of the other processes. All other processes will receive the same piece of data.
 
-![](https://raw.githubusercontent.com/SharynHu/picBed/master/85B15782-2C57-4395-9385-A57FD9CDF2AB.png)
-<div align=center><img width="800" height="400" src="https://raw.githubusercontent.com/SharynHu/picBed/master/85B15782-2C57-4395-9385-A57FD9CDF2AB.png"/></div>
+<div align=center><img width="700" height="300" src="https://raw.githubusercontent.com/SharynHu/picBed/master/85B15782-2C57-4395-9385-A57FD9CDF2AB.png"/></div>
 
 ### Scatter (one to many)
 A close relative of the broadcast is Scatter, where one process divides values between many others. Different processes may receive different pieces of data.
 
-![](https://raw.githubusercontent.com/SharynHu/picBed/master/DD3FFC74-B93C-4CE1-B4D9-9DB8E6EA8603.png)
+<div align=center><img width="700" height="300" src="https://raw.githubusercontent.com/SharynHu/picBed/master/DD3FFC74-B93C-4CE1-B4D9-9DB8E6EA8603.png"/></div>
 
 ### Gather (many to one)
 The inverse of Scatter is Gather. In which many processes have different parts of the overall picture which are then brought together to one process.
 
-![](https://raw.githubusercontent.com/SharynHu/picBed/master/C6EE0C1B-A13A-4C44-B1D2-965737EF3E11.png)
+<div align=center><img width="700" height="300" src="https://raw.githubusercontent.com/SharynHu/picBed/master/C6EE0C1B-A13A-4C44-B1D2-965737EF3E11.png"/></div>
 
 ### Reduction (one to many)
 Reduction which combines communication and computation of many useful sorts of operations finding a global minimum, maximum sum or product are fundamentally reduction operations. Consider doing a global sum of data. Each process calculates its partial sum and then these are combined into a global sum on one process.
 
-![](https://raw.githubusercontent.com/SharynHu/picBed/master/C6EE0C1B-A13A-4C44-B1D2-965737EF3E11.png)
+<div align=center><img width="700" height="300" src="https://raw.githubusercontent.com/SharynHu/picBed/master/C6EE0C1B-A13A-4C44-B1D2-965737EF3E11.png"/></div>
 
-$$\Downarrow communication\;and\;computation$$
-![](https://raw.githubusercontent.com/SharynHu/picBed/master/E516E150-03BC-4AFB-A148-589AD21BA087.png)
-
+<div align=center><img width="700" height="300" src="https://raw.githubusercontent.com/SharynHu/picBed/master/E516E150-03BC-4AFB-A148-589AD21BA087.png"/></div>
