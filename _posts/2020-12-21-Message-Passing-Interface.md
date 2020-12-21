@@ -2,8 +2,7 @@
 MPI is a standard library for message passing.
 ## Why MPI
  - **The MPI interface is designed and implemented with performance in mind.**
- - **The MPI interface will take advantage of the fastest network transport available to it when sending messages.**
-For an instance, to communicate with two different processes within a node, MPI will use a shared memory(within a computer) to send and receive messages rather than network communications. On fast interconnects, within a high performance computer cluster it already knows how to take advantage of transports like Infiniband or Myrinet for communications to processes on other nodes, and if all else fails only it will use the Standard Internet TCP/IP.
+ - **The MPI interface will take advantage of the fastest network transport available to it when sending messages.**<br>For an instance, to communicate with two different processes within a node, MPI will use a shared memory(within a computer) to send and receive messages rather than network communications. On fast interconnects, within a high performance computer cluster it already knows how to take advantage of transports like Infiniband or Myrinet for communications to processes on other nodes, and if all else fails only it will use the Standard Internet TCP/IP.
  - **MPI Enforces other guarantees.**
  Retries, messages arrive in order.
  - **MPI is designed for multi-node technical computing.**
@@ -14,7 +13,7 @@ We can spend our time figuring out how to decompose our scientific problem rathe
 One process has a piece of data and broadcasts it to many or all of the other processes. All other processes will receive the same piece of data.
 
 ![](https://raw.githubusercontent.com/SharynHu/picBed/master/85B15782-2C57-4395-9385-A57FD9CDF2AB.png)
-
+<div align=center><img width="150" height="150" src="https://raw.githubusercontent.com/SharynHu/picBed/master/85B15782-2C57-4395-9385-A57FD9CDF2AB.png"/></div>
 
 ### Scatter (one to many)
 A close relative of the broadcast is Scatter, where one process divides values between many others. Different processes may receive different pieces of data.
