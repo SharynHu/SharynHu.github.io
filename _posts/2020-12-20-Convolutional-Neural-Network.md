@@ -17,7 +17,7 @@ A full convolutional neural network are made of:
 
 ### Commonly used techniques
 #### Padding
-<div align=center><img width="700" height="300" src="https://raw.githubusercontent.com/SharynHu/picBed/master/1_1okwhewf5KCtIPaFib4XaA.gif"/></div>
+<div align=center><img width="400" height="500" src="https://raw.githubusercontent.com/SharynHu/picBed/master/1_1okwhewf5KCtIPaFib4XaA.gif"/></div>
 
 #### Stride
 
