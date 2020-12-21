@@ -13,7 +13,7 @@ We can spend our time figuring out how to decompose our scientific problem rathe
 One process has a piece of data and broadcasts it to many or all of the other processes. All other processes will receive the same piece of data.
 
 ![](https://raw.githubusercontent.com/SharynHu/picBed/master/85B15782-2C57-4395-9385-A57FD9CDF2AB.png)
-<div align=center><img width="150" height="150" src="https://raw.githubusercontent.com/SharynHu/picBed/master/85B15782-2C57-4395-9385-A57FD9CDF2AB.png"/></div>
+<div align=center><img width="800" height="400" src="https://raw.githubusercontent.com/SharynHu/picBed/master/85B15782-2C57-4395-9385-A57FD9CDF2AB.png"/></div>
 
 ### Scatter (one to many)
 A close relative of the broadcast is Scatter, where one process divides values between many others. Different processes may receive different pieces of data.
