@@ -1,4 +1,4 @@
-<head>
+<!-- <head>
     <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
     <script type="text/x-mathjax-config">
         MathJax.Hub.Config({
@@ -8,7 +8,7 @@
             }
         });
     </script>
-</head>
+</head> -->
 ## Neuron
 <div align=center>
 <img width="400" height="200" src="https://raw.githubusercontent.com/SharynHu/picBed/master/65E72571-A911-4B44-8ED5-CC45183AC035.png"></img>
@@ -58,7 +58,7 @@ Then we have
 $$Z^{[1]}=w^{[1]}A^{[0]}+b^{[1]}, A^{[1]}=g(Z^{[1]})$$
 Similarly, 
 $$Z^{[2]}=w^{[2]}A^{[1]}+b^{[2]}, A^{[2]}=\sigma(Z^{[2]})$$
-###Cost Function
+### Cost Function
 We define the cost function to be a cross entropy:
 $$J(\hat Y, Y) = Y*\log\hat Y+(1-Y)*\log(1-\hat Y)$$
 
