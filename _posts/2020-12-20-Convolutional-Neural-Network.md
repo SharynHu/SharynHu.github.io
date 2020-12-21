@@ -13,15 +13,15 @@ A full convolutional neural network are made of:
 
 ## 2-D convolution
 
-<div align=center><img width="400" height="250" src="https://raw.githubusercontent.com/SharynHu/picBed/master/FBEB8B9C-513C-42DD-BA14-3ADC1E4C4144.gif"/></div>
+<div align=center><img width="300" height="200" src="https://raw.githubusercontent.com/SharynHu/picBed/master/FBEB8B9C-513C-42DD-BA14-3ADC1E4C4144.gif"/></div>
 
 ### Commonly used techniques
 #### Padding
-<div align=center><img width="400" height="500" src="https://raw.githubusercontent.com/SharynHu/picBed/master/1_1okwhewf5KCtIPaFib4XaA.gif"/></div>
+<div align=center><img width="300" height="400" src="https://raw.githubusercontent.com/SharynHu/picBed/master/1_1okwhewf5KCtIPaFib4XaA.gif"/></div>
 
 #### Stride
 
-<div align=center><img width="400" height="400" src="https://raw.githubusercontent.com/SharynHu/picBed/master/57EEC4CF-CCAE-474B-8227-7E6AB3D0E7F2.gif"/></div>
+<div align=center><img width="300" height="300" src="https://raw.githubusercontent.com/SharynHu/picBed/master/57EEC4CF-CCAE-474B-8227-7E6AB3D0E7F2.gif"/></div>
 <br>
 **Note:** A stride of 1 is equivalent to a standard convolution.
 
@@ -32,7 +32,7 @@ A filter is actually a collection of kernals in general case.
 One kernal for one channel.
 For example:
 for an image that has 3 channels, a filter has 3 kernals per channel.
-<div align=center><img width="600" height="350" src="https://raw.githubusercontent.com/SharynHu/picBed/master/5D0EF5F7-4C9B-47B2-B142-268F211C69D6.gif"/></div>
+<div align=center><img width="600" height="250" src="https://raw.githubusercontent.com/SharynHu/picBed/master/5D0EF5F7-4C9B-47B2-B142-268F211C69D6.gif"/></div>
 
 Each of the per-channel processed versions are then summed together to form one channel. The kernels of a filter each produce one version of each channel, and the filter as a whole produces one overall output channel.
 
