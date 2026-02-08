@@ -1,3 +1,9 @@
+---
+layout: post
+tag-name: mpi
+title: Message Passing Interface
+---
+
 ## What is MPI
 MPI is a standard library for message passing.
 ## Why MPI

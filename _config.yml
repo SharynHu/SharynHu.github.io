@@ -1,4 +1,6 @@
 theme: jekyll-theme-cayman
 name: Xiaojing Hu
 markdown: kramdown
+kramdown:
+  syntax_highlighter: rouge
 permalink: /blog/:year/:month/:day/:title

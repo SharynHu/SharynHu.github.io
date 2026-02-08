@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.2.1">Jekyll</generator><link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4000/" rel="alternate" type="text/html" /><updated>2022-01-03T02:09:45+08:00</updated><id>http://localhost:4000/feed.xml</id><title type="html">Xiaojing Hu</title><entry><title type="html">Bubble Sort</title><link href="http://localhost:4000/blog/2022/01/03/bubble_sort" rel="alternate" type="text/html" title="Bubble Sort" /><published>2022-01-03T00:00:00+08:00</published><updated>2022-01-03T00:00:00+08:00</updated><id>http://localhost:4000/blog/2022/01/03/bubble_sort</id><content type="html" xml:base="http://localhost:4000/blog/2022/01/03/bubble_sort">&lt;h2 id=&quot;bubble-sort&quot;&gt;Bubble Sort&lt;/h2&gt;
+&lt;p&gt;Bubble sort is sorting an array by repeatedly swapping the maximum element to the end of the array.&lt;/p&gt;
+
+&lt;h2 id=&quot;stability-and-complexity&quot;&gt;Stability and Complexity&lt;/h2&gt;
+&lt;p&gt;Bubble sort is  &lt;strong&gt;stable&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;Time complexity&lt;/th&gt;
+      &lt;th&gt;Space complexity&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;$O(n^2)$&lt;/td&gt;
+      &lt;td&gt;$O(1)$&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;h2 id=&quot;pseudo-code&quot;&gt;Pseudo Code&lt;/h2&gt;
+
+&lt;div class=&quot;language-python highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;bubble_sort&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;arr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;):&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;for&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;ow&quot;&gt;in&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;range&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;len&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;arr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)):&lt;/span&gt;
+        &lt;span class=&quot;c1&quot;&gt;# sort arr[:len(arr)-i+1]
+&lt;/span&gt;        &lt;span class=&quot;k&quot;&gt;for&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;j&lt;/span&gt; &lt;span class=&quot;ow&quot;&gt;in&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;range&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;len&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;arr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;):&lt;/span&gt;
+            &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;arr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;j&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;+&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;arr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;j&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]:&lt;/span&gt;
+                &lt;span class=&quot;n&quot;&gt;arr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;j&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;],&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;arr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;j&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;+&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;arr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;j&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;+&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;],&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;arr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;j&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;improved-bubble-sort&quot;&gt;Improved Bubble Sort&lt;/h2&gt;
+&lt;p&gt;There are two ways to improve the effiency of  bubble sort:&lt;/p&gt;
+
+&lt;h3 id=&quot;1-early-stop-the-swapping&quot;&gt;1. early stop the swapping&lt;/h3&gt;
+&lt;p&gt;If in an iteration, there is no swapping, we know that the array has already been sorted and there is no need to do the rest iterations.&lt;/p&gt;
+
+&lt;div class=&quot;language-python highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;bubble_sort_early_stop&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;</content><author><name></name></author><summary type="html">Bubble Sort Bubble sort is sorting an array by repeatedly swapping the maximum element to the end of the array.</summary></entry><entry><title type="html">Test</title><link href="http://localhost:4000/blog/2020/12/23/test" rel="alternate" type="text/html" title="Test" /><published>2020-12-23T00:00:00+08:00</published><updated>2020-12-23T00:00:00+08:00</updated><id>http://localhost:4000/blog/2020/12/23/test</id><content type="html" xml:base="http://localhost:4000/blog/2020/12/23/test">&lt;p&gt;Hello!&lt;/p&gt;</content><author><name></name></author><summary type="html">Hello!</summary></entry><entry><title type="html">Message Passing Interface</title><link href="http://localhost:4000/blog/2020/12/21/Message-Passing-Interface" rel="alternate" type="text/html" title="Message Passing Interface" /><published>2020-12-21T00:00:00+08:00</published><updated>2020-12-21T00:00:00+08:00</updated><id>http://localhost:4000/blog/2020/12/21/Message-Passing-Interface</id><content type="html" xml:base="http://localhost:4000/blog/2020/12/21/Message-Passing-Interface">&lt;h2 id=&quot;what-is-mpi&quot;&gt;What is MPI&lt;/h2&gt;
+&lt;p&gt;MPI is a standard library for message passing.&lt;/p&gt;
+&lt;h2 id=&quot;why-mpi&quot;&gt;Why MPI&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;&lt;strong&gt;The MPI interface is designed and implemented with performance in mind.&lt;/strong&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;The MPI interface will take advantage of the fastest network transport available to it when sending messages.&lt;/strong&gt;&lt;br /&gt;For an instance, to communicate with two different processes within a node, MPI will use a shared memory(within a computer) to send and receive messages rather than network communications. On fast interconnects, within a high performance computer cluster it already knows how to take advantage of transports like Infiniband or Myrinet for communications to processes on other nodes, and if all else fails only it will use the Standard Internet TCP/IP.&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;MPI Enforces other guarantees.&lt;/strong&gt;
+ Retries, messages arrive in order.&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;MPI is designed for multi-node technical computing.&lt;/strong&gt;
+We can spend our time figuring out how to decompose our scientific problem rather than having to worry about network protocols.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;several-ways-of-communication&quot;&gt;Several ways of communication&lt;/h2&gt;
+&lt;h3 id=&quot;broadcast-one-to-many&quot;&gt;Broadcast (one to many)&lt;/h3&gt;
+&lt;p&gt;One process has a piece of data and broadcasts it to many or all of the other processes. All other processes will receive the same piece of data.&lt;/p&gt;
+
+&lt;div align=&quot;center&quot;&gt;&lt;img width=&quot;700&quot; height=&quot;300&quot; src=&quot;https://raw.githubusercontent.com/SharynHu/picBed/master/85B15782-2C57-4395-9385-A57FD9CDF2AB.png&quot; /&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;scatter-one-to-many&quot;&gt;Scatter (one to many)&lt;/h3&gt;
+&lt;p&gt;A close relative of the broadcast is Scatter, where one process divides values between many others. Different processes may receive different pieces of data.&lt;/p&gt;
+
+&lt;div align=&quot;center&quot;&gt;&lt;img width=&quot;700&quot; height=&quot;300&quot; src=&quot;https://raw.githubusercontent.com/SharynHu/picBed/master/DD3FFC74-B93C-4CE1-B4D9-9DB8E6EA8603.png&quot; /&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;gather-many-to-one&quot;&gt;Gather (many to one)&lt;/h3&gt;
+&lt;p&gt;The inverse of Scatter is Gather. In which many processes have different parts of the overall picture which are then brought together to one process.&lt;/p&gt;
+
+&lt;div align=&quot;center&quot;&gt;&lt;img width=&quot;700&quot; height=&quot;300&quot; src=&quot;https://raw.githubusercontent.com/SharynHu/picBed/master/C6EE0C1B-A13A-4C44-B1D2-965737EF3E11.png&quot; /&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;reduction-one-to-many&quot;&gt;Reduction (one to many)&lt;/h3&gt;
+&lt;p&gt;Reduction which combines communication and computation of many useful sorts of operations finding a global minimum, maximum sum or product are fundamentally reduction operations. Consider doing a global sum of data. Each process calculates its partial sum and then these are combined into a global sum on one process.&lt;/p&gt;
+
+&lt;div align=&quot;center&quot;&gt;&lt;img width=&quot;700&quot; height=&quot;300&quot; src=&quot;https://raw.githubusercontent.com/SharynHu/picBed/master/C6EE0C1B-A13A-4C44-B1D2-965737EF3E11.png&quot; /&gt;&lt;/div&gt;
+
+&lt;div align=&quot;center&quot;&gt;&lt;img width=&quot;700&quot; height=&quot;300&quot; src=&quot;https://raw.githubusercontent.com/SharynHu/picBed/master/E516E150-03BC-4AFB-A148-589AD21BA087.png&quot; /&gt;&lt;/div&gt;</content><author><name></name></author><summary type="html">What is MPI MPI is a standard library for message passing. Why MPI The MPI interface is designed and implemented with performance in mind. The MPI interface will take advantage of the fastest network transport available to it when sending messages.For an instance, to communicate with two different processes within a node, MPI will use a shared memory(within a computer) to send and receive messages rather than network communications. On fast interconnects, within a high performance computer cluster it already knows how to take advantage of transports like Infiniband or Myrinet for communications to processes on other nodes, and if all else fails only it will use the Standard Internet TCP/IP. MPI Enforces other guarantees. Retries, messages arrive in order. MPI is designed for multi-node technical computing. We can spend our time figuring out how to decompose our scientific problem rather than having to worry about network protocols.</summary></entry><entry><title type="html">Neural Networks</title><link href="http://localhost:4000/blog/2020/12/21/Neural-Networks" rel="alternate" type="text/html" title="Neural Networks" /><published>2020-12-21T00:00:00+08:00</published><updated>2020-12-21T00:00:00+08:00</updated><id>http://localhost:4000/blog/2020/12/21/Neural-Networks</id><content type="html" xml:base="http://localhost:4000/blog/2020/12/21/Neural-Networks">&lt;h2 id=&quot;neuron&quot;&gt;Neuron&lt;/h2&gt;
+&lt;div align=&quot;center&quot;&gt;
+&lt;img width=&quot;400&quot; height=&quot;200&quot; src=&quot;https://raw.githubusercontent.com/SharynHu/picBed/master/65E72571-A911-4B44-8ED5-CC45183AC035.png&quot; /&gt;
+&lt;/div&gt;
+
+&lt;h2 id=&quot;neural-network&quot;&gt;Neural Network&lt;/h2&gt;
+&lt;p&gt;Neural networks is combining multiple neurons together.
+Below is the structure of a 2-layer neural network:&lt;/p&gt;
+
+&lt;div align=&quot;center&quot;&gt;
+&lt;img width=&quot;400&quot; height=&quot;200&quot; src=&quot;https://raw.githubusercontent.com/SharynHu/picBed/master/B27A7ABB-D0F1-4953-93B2-8342635D7177.png&quot; /&gt;
+&lt;/div&gt;
+
+&lt;p&gt;$a^{[0]}$ is the input layer, $a^{[1]}$ is the hidden layer, and $a^{[2]}$ is the output layer. For layer 1 the activation function is $g$ and for layer 2 the activation function is sigmoid. Parameter $w^{[1]}$ is a $4\times3$ matrix; parameter $b^{[1]}$ is a $4\times1$ vector.
+For layer 1 we have&lt;/p&gt;
+
+\[W^{[1]}=\left[
+\begin{matrix}
+w^{[1]T}_1\\
+w^{[1]T}_2\\
+w^{[1]T}_3\\
+w^{[1]T}_4\\
+\end{matrix}
+\right]\]
+
+\[b^{[1]}=\left[
+\begin{matrix}
+b^{[1]}_1\\
+b^{[1]}_2\\
+b^{[1]}_3\\
+b^{[1]}_4\\
+\end{matrix}
+\right]\]
+
+\[z^{[1]}_1 = w^{[1]T}_1a^{[0]}+b^{[1]}_1, a^{[1]}_1=g(z^{[1]}_1)\]
+
+\[z^{[1]}_2 = w^{[1]T}_2a^{[0]}+b^{[1]}_2, a^{[1]}_2=g(z^{[1]}_2)\]
+
+\[z^{[1]}_3 = w^{[1]T}_3a^{[0]}+b^{[1]}_3, a^{[1]}_3=g(z^{[1]}_3)\]
+
+\[z^{[1]}_4 = w^{[1]T}_4a^{[0]}+b^{[1]}_4, a^{[1]_4}=g(z^{[1]}_4)\]
+
+&lt;p&gt;Vectorize it we get:&lt;/p&gt;
+
+\[z^{[1]}=W^{[1]}a^{[0]}, A^{[1]}=g(Z^{[1]})\]
+
+&lt;p&gt;Similarly for layer 2 we get&lt;/p&gt;
+
+\[Z^{[2]}=W^{[2]}A^{[1]}, A^{[2]}=\sigma(z^{[2]})\]
+
+&lt;h2 id=&quot;vectorizing-across-multiple-examples&quot;&gt;Vectorizing Across Multiple Examples&lt;/h2&gt;
+&lt;h3 id=&quot;forward--propagation&quot;&gt;Forward  Propagation&lt;/h3&gt;
+&lt;p&gt;We define the training set $A^{[0]}$ to have m examples, that is&lt;/p&gt;
+
+\[A^{[0]} = \left[
+\begin{matrix}
+a^{[0](1)]}, a^{[0](2)]}, \cdots, a^{[0](m)]}
+\end{matrix}
+\right]\]
+
+&lt;p&gt;Then we have&lt;/p&gt;
+
+\[Z^{[1]}=w^{[1]}A^{[0]}+b^{[1]}, A^{[1]}=g(Z^{[1]})\]
+
+&lt;p&gt;Similarly,&lt;/p&gt;
+
+\[Z^{[2]}=w^{[2]}A^{[1]}+b^{[2]}, A^{[2]}=\sigma(Z^{[2]})\]
+
+&lt;h3 id=&quot;cost-function&quot;&gt;Cost Function&lt;/h3&gt;
+&lt;p&gt;We define the cost function to be a cross entropy:&lt;/p&gt;
+
+\[J(\hat Y, Y) = Y*\log\hat Y+(1-Y)*\log(1-\hat Y)\]
+
+&lt;h3 id=&quot;backward-propagation&quot;&gt;Backward propagation&lt;/h3&gt;
+&lt;p&gt;We know that if we use the sigmoid function for layer 2 and use the cross-entropy as the cost function, the gradient for $Z^{[2]}$ will be:&lt;/p&gt;
+
+\[dZ^{[2]}=A^{[2]}-Y\]
+
+\[dW^{[2]}=\frac{d\mathcal J}{dZ^{[2]}}\]</content><author><name></name></author><summary type="html">Neuron</summary></entry><entry><title type="html">Convolutional Neural Network</title><link href="http://localhost:4000/blog/2020/12/20/Convolutional-Neural-Network" rel="alternate" type="text/html" title="Convolutional Neural Network" /><published>2020-12-20T00:00:00+08:00</published><updated>2020-12-20T00:00:00+08:00</updated><id>http://localhost:4000/blog/2020/12/20/Convolutional-Neural-Network</id><content type="html" xml:base="http://localhost:4000/blog/2020/12/20/Convolutional-Neural-Network">&lt;h2 id=&quot;what-is-a-cnn-made-of&quot;&gt;What is a CNN made of&lt;/h2&gt;
+&lt;p&gt;A full convolutional neural network are made of:&lt;/p&gt;
+&lt;ol&gt;
+  &lt;li&gt;input layer&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;convolutional layer&lt;/strong&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;ReLU layer&lt;/strong&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;pooling layer&lt;/strong&gt;&lt;/li&gt;
+  &lt;li&gt;fully-connected layer&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;h2 id=&quot;why-do-we-need-cnn&quot;&gt;Why do we need CNN&lt;/h2&gt;
+&lt;ol&gt;
+  &lt;li&gt;We need to reserve the spacial information of input;&lt;/li&gt;
+  &lt;li&gt;We need less parameters;&lt;/li&gt;
+  &lt;li&gt;To avoid overfitting caused by large amount of parameters.&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;h2 id=&quot;2-d-convolution&quot;&gt;2-D convolution&lt;/h2&gt;
+
+&lt;div align=&quot;center&quot;&gt;&lt;img width=&quot;300&quot; height=&quot;200&quot; src=&quot;https://raw.githubusercontent.com/SharynHu/picBed/master/FBEB8B9C-513C-42DD-BA14-3ADC1E4C4144.gif&quot; /&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;commonly-used-techniques&quot;&gt;Commonly used techniques&lt;/h3&gt;
+&lt;h4 id=&quot;padding&quot;&gt;Padding&lt;/h4&gt;
+&lt;div align=&quot;center&quot;&gt;&lt;img width=&quot;300&quot; height=&quot;400&quot; src=&quot;https://raw.githubusercontent.com/SharynHu/picBed/master/1_1okwhewf5KCtIPaFib4XaA.gif&quot; /&gt;&lt;/div&gt;
+
+&lt;h4 id=&quot;stride&quot;&gt;Stride&lt;/h4&gt;
+
+&lt;div align=&quot;center&quot;&gt;&lt;img width=&quot;300&quot; height=&quot;300&quot; src=&quot;https://raw.githubusercontent.com/SharynHu/picBed/master/57EEC4CF-CCAE-474B-8227-7E6AB3D0E7F2.gif&quot; /&gt;&lt;/div&gt;
+&lt;p&gt;&lt;br /&gt;
+&lt;strong&gt;Note:&lt;/strong&gt; A stride of 1 is equivalent to a standard convolution.&lt;/p&gt;
+
+&lt;h2 id=&quot;multi-channal-convolution&quot;&gt;Multi-channal convolution&lt;/h2&gt;
+&lt;h3 id=&quot;filter&quot;&gt;Filter&lt;/h3&gt;
+&lt;p&gt;A filter is actually a collection of kernals in general case.
+One kernal for one channel.
+For example:
+for an image that has 3 channels, a filter has 3 kernals per channel.&lt;/p&gt;
+&lt;div align=&quot;center&quot;&gt;&lt;img width=&quot;600&quot; height=&quot;250&quot; src=&quot;https://raw.githubusercontent.com/SharynHu/picBed/master/5D0EF5F7-4C9B-47B2-B142-268F211C69D6.gif&quot; /&gt;&lt;/div&gt;
+
+&lt;p&gt;Each of the per-channel processed versions are then summed together to form one channel. The kernels of a filter each produce one version of each channel, and the filter as a whole produces one overall output channel.&lt;/p&gt;
+
+&lt;div align=&quot;center&quot;&gt;&lt;img width=&quot;700&quot; height=&quot;300&quot; src=&quot;https://raw.githubusercontent.com/SharynHu/picBed/master/074409D9-2155-4EE6-8A59-912895C8D5CC.gif&quot; /&gt;&lt;/div&gt;
+
+&lt;p&gt;Finally, then there’s the bias term. The way the bias term works here is that each output filter has one bias term. The bias gets added to the output channel so far to produce the final output channel.&lt;/p&gt;
+
+&lt;div align=&quot;center&quot;&gt;&lt;img width=&quot;300&quot; height=&quot;450&quot; src=&quot;https://raw.githubusercontent.com/SharynHu/picBed/master/A46A9F9B-E39E-4827-9A86-ECED31387308.gif&quot; /&gt;&lt;/div&gt;
+
+&lt;p&gt;So for each filter, it produces one output channel. outputs for all filters concatenated are the final multi-channeled output.&lt;/p&gt;
+
+&lt;h2 id=&quot;one-by-one-convolution&quot;&gt;One by one convolution&lt;/h2&gt;
+
+&lt;h1 id=&quot;reference&quot;&gt;Reference&lt;/h1&gt;
+&lt;ol&gt;
+  &lt;li&gt;&lt;a href=&quot;https://towardsdatascience.com/intuitively-understanding-convolutions-for-deep-learning-1f6f42faee1&quot;&gt;https://towardsdatascience.com/intuitively-understanding-convolutions-for-deep-learning-1f6f42faee1&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://zhuanlan.zhihu.com/p/47184529&quot;&gt;https://zhuanlan.zhihu.com/p/47184529&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://iamaaditya.github.io/2016/03/one-by-one-convolution/&quot;&gt;https://iamaaditya.github.io/2016/03/one-by-one-convolution/&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;</content><author><name></name></author><summary type="html">What is a CNN made of A full convolutional neural network are made of: input layer convolutional layer ReLU layer pooling layer fully-connected layer</summary></entry></feed>

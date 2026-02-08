@@ -1,3 +1,8 @@
+---
+layout: post
+title: Convolutional Neural Network
+date: 2020-12-20
+---
 ## What is a CNN made of
 A full convolutional neural network are made of:
 1. input layer

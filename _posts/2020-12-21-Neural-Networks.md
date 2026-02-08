@@ -1,3 +1,10 @@
+---
+layout: post
+tag-name: "deep learning"
+date: 2020-12-21
+---
+
+
 ## Neuron
 <div align="center">
 <img width="400" height="200" src="https://raw.githubusercontent.com/SharynHu/picBed/master/65E72571-A911-4B44-8ED5-CC45183AC035.png"/>

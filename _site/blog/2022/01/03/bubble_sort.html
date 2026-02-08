@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+	<html>
+		<head>
+			<title>Bubble Sort</title>
+			<!-- link to main stylesheet -->
+			<link rel="stylesheet" type="text/css" href="/css/main.css">
+		</head>
+		<body>
+			<nav>
+	    		<ul>
+	        		<li><a href="/">Home</a></li>
+		        	<li><a href="/about">About</a></li>
+	        		<li><a href="/cv">CV</a></li>
+	        		<li><a href="/blog">Blog</a></li>
+					<li><a href="/algorithms">Algorithms</a></li>
+	    		</ul>
+			</nav>
+			<div class="container">
+			
+			<head>
+    <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({
+            tex2jax: {
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+            inlineMath: [['$','$']]
+            }
+        });
+    </script>
+    <link rel="stylesheet" href="/css/syntax.css">
+</head>
+<h1>Bubble Sort</h1>
+<p class="meta">03 Jan 2022</p>
+
+<div class="post">
+  <h2 id="bubble-sort">Bubble Sort</h2>
+<p>Bubble sort is sorting an array by repeatedly swapping the maximum element to the end of the array.</p>
+
+<h2 id="stability-and-complexity">Stability and Complexity</h2>
+<p>Bubble sort is  <strong>stable</strong>.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Time complexity</th>
+      <th>Space complexity</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>$O(n^2)$</td>
+      <td>$O(1)$</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="pseudo-code">Pseudo Code</h2>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">bubble_sort</span><span class="p">(</span><span class="n">arr</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">arr</span><span class="p">)):</span>
+        <span class="c1"># sort arr[:len(arr)-i+1]
+</span>        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span><span class="o">-</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">arr</span><span class="p">[</span><span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span><span class="o">&gt;</span><span class="n">arr</span><span class="p">[</span><span class="n">j</span><span class="p">]:</span>
+                <span class="n">arr</span><span class="p">[</span><span class="n">j</span><span class="p">],</span> <span class="n">arr</span><span class="p">[</span><span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">],</span> <span class="n">arr</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+</code></pre></div></div>
+
+<h2 id="improved-bubble-sort">Improved Bubble Sort</h2>
+<p>There are two ways to improve the effiency of  bubble sort:</p>
+
+<h3 id="1-early-stop-the-swapping">1. early stop the swapping</h3>
+<p>If in an iteration, there is no swapping, we know that the array has already been sorted and there is no need to do the rest iterations.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">bubble_sort_early_stop</span><span class="p">()</span>
+</code></pre></div></div>
+
+</div>
+
+			
+			</div><!-- /.container -->
+			<footer>
+	    		<ul>
+	        		<li><span style="color:#999">E-mail:</span><a href="mailto:hxj19931011@gmail.com">hxj19931011@gmail.com</a></li>
+				<br/>
+				<li><span style="color:#999">GitHub:</span><a href="https://github.com/SharynHu">github.com/SharynHu</a></li>
+				</ul>
+			</footer>
+		</body>
+	</html>
+

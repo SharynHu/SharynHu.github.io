@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+	<html>
+		<head>
+			<title>Neural Networks</title>
+			<!-- link to main stylesheet -->
+			<link rel="stylesheet" type="text/css" href="/css/main.css">
+		</head>
+		<body>
+			<nav>
+	    		<ul>
+	        		<li><a href="/">Home</a></li>
+		        	<li><a href="/about">About</a></li>
+	        		<li><a href="/cv">CV</a></li>
+	        		<li><a href="/blog">Blog</a></li>
+					<li><a href="/algorithms">Algorithms</a></li>
+	    		</ul>
+			</nav>
+			<div class="container">
+			
+			<head>
+    <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({
+            tex2jax: {
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+            inlineMath: [['$','$']]
+            }
+        });
+    </script>
+    <link rel="stylesheet" href="/css/syntax.css">
+</head>
+<h1>Neural Networks</h1>
+<p class="meta">21 Dec 2020</p>
+
+<div class="post">
+  <h2 id="neuron">Neuron</h2>
+<div align="center">
+<img width="400" height="200" src="https://raw.githubusercontent.com/SharynHu/picBed/master/65E72571-A911-4B44-8ED5-CC45183AC035.png" />
+</div>
+
+<h2 id="neural-network">Neural Network</h2>
+<p>Neural networks is combining multiple neurons together.
+Below is the structure of a 2-layer neural network:</p>
+
+<div align="center">
+<img width="400" height="200" src="https://raw.githubusercontent.com/SharynHu/picBed/master/B27A7ABB-D0F1-4953-93B2-8342635D7177.png" />
+</div>
+
+<p>$a^{[0]}$ is the input layer, $a^{[1]}$ is the hidden layer, and $a^{[2]}$ is the output layer. For layer 1 the activation function is $g$ and for layer 2 the activation function is sigmoid. Parameter $w^{[1]}$ is a $4\times3$ matrix; parameter $b^{[1]}$ is a $4\times1$ vector.
+For layer 1 we have</p>
+
+\[W^{[1]}=\left[
+\begin{matrix}
+w^{[1]T}_1\\
+w^{[1]T}_2\\
+w^{[1]T}_3\\
+w^{[1]T}_4\\
+\end{matrix}
+\right]\]
+
+\[b^{[1]}=\left[
+\begin{matrix}
+b^{[1]}_1\\
+b^{[1]}_2\\
+b^{[1]}_3\\
+b^{[1]}_4\\
+\end{matrix}
+\right]\]
+
+\[z^{[1]}_1 = w^{[1]T}_1a^{[0]}+b^{[1]}_1, a^{[1]}_1=g(z^{[1]}_1)\]
+
+\[z^{[1]}_2 = w^{[1]T}_2a^{[0]}+b^{[1]}_2, a^{[1]}_2=g(z^{[1]}_2)\]
+
+\[z^{[1]}_3 = w^{[1]T}_3a^{[0]}+b^{[1]}_3, a^{[1]}_3=g(z^{[1]}_3)\]
+
+\[z^{[1]}_4 = w^{[1]T}_4a^{[0]}+b^{[1]}_4, a^{[1]_4}=g(z^{[1]}_4)\]
+
+<p>Vectorize it we get:</p>
+
+\[z^{[1]}=W^{[1]}a^{[0]}, A^{[1]}=g(Z^{[1]})\]
+
+<p>Similarly for layer 2 we get</p>
+
+\[Z^{[2]}=W^{[2]}A^{[1]}, A^{[2]}=\sigma(z^{[2]})\]
+
+<h2 id="vectorizing-across-multiple-examples">Vectorizing Across Multiple Examples</h2>
+<h3 id="forward--propagation">Forward  Propagation</h3>
+<p>We define the training set $A^{[0]}$ to have m examples, that is</p>
+
+\[A^{[0]} = \left[
+\begin{matrix}
+a^{[0](1)]}, a^{[0](2)]}, \cdots, a^{[0](m)]}
+\end{matrix}
+\right]\]
+
+<p>Then we have</p>
+
+\[Z^{[1]}=w^{[1]}A^{[0]}+b^{[1]}, A^{[1]}=g(Z^{[1]})\]
+
+<p>Similarly,</p>
+
+\[Z^{[2]}=w^{[2]}A^{[1]}+b^{[2]}, A^{[2]}=\sigma(Z^{[2]})\]
+
+<h3 id="cost-function">Cost Function</h3>
+<p>We define the cost function to be a cross entropy:</p>
+
+\[J(\hat Y, Y) = Y*\log\hat Y+(1-Y)*\log(1-\hat Y)\]
+
+<h3 id="backward-propagation">Backward propagation</h3>
+<p>We know that if we use the sigmoid function for layer 2 and use the cross-entropy as the cost function, the gradient for $Z^{[2]}$ will be:</p>
+
+\[dZ^{[2]}=A^{[2]}-Y\]
+
+\[dW^{[2]}=\frac{d\mathcal J}{dZ^{[2]}}\]
+
+</div>
+
+			
+			</div><!-- /.container -->
+			<footer>
+	    		<ul>
+	        		<li><span style="color:#999">E-mail:</span><a href="mailto:hxj19931011@gmail.com">hxj19931011@gmail.com</a></li>
+				<br/>
+				<li><span style="color:#999">GitHub:</span><a href="https://github.com/SharynHu">github.com/SharynHu</a></li>
+				</ul>
+			</footer>
+		</body>
+	</html>
+
