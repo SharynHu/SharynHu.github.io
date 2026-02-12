@@ -55,3 +55,216 @@ th{
 td{
     border:1px solid #000000;
 }
+
+/* Reader-friendly overrides for Notion exports in posts */
+.post {
+    max-width: 900px;
+    margin: 2.5rem auto 4rem;
+}
+
+.post .page {
+    font-family: "Helvetica", "Arial", "Sans-Serif";
+    font-size: 18px;
+    line-height: 1.7;
+    white-space: normal !important;
+}
+
+.post .page p,
+.post .page li,
+.post .page .collection-content,
+.post .page .simple-table,
+.post .page .table_of_contents-item,
+.post .page .bookmark-title,
+.post .page .bookmark-description,
+.post .page .bookmark-href {
+    font-size: 1rem;
+    line-height: 1.7;
+}
+
+.post .page p {
+    margin: 0.85em 0;
+}
+
+.post .page li {
+    margin: 0.35em 0;
+}
+
+.post .page .page-title {
+    font-size: 2.4rem;
+    line-height: 1.15;
+    margin-bottom: 0.6em;
+}
+
+.post .page h1 {
+    font-size: 2rem;
+    margin-top: 2.2rem;
+}
+
+.post .page h2 {
+    font-size: 1.55rem;
+    margin-top: 1.8rem;
+}
+
+.post .page h3 {
+    font-size: 1.25rem;
+    margin-top: 1.4rem;
+}
+
+.post .page code,
+.post .page .code {
+    font-size: 0.95em;
+}
+
+.post .page pre.code,
+.post .page pre.code.code-wrap {
+    padding: 1.25em 1em;
+    border-radius: 8px;
+    overflow-x: auto;
+    white-space: pre !important;
+    word-break: normal !important;
+}
+
+.post .page pre.code code {
+    white-space: pre !important;
+    word-break: normal !important;
+}
+
+.post .page table {
+    width: 100%;
+    font-size: 0.95em;
+}
+
+.post .page th,
+.post .page td {
+    padding: 0.4em 0.6em;
+}
+
+@media only screen and (max-width: 900px) {
+    .post {
+        margin: 2rem auto 3rem;
+    }
+
+    .post .page {
+        font-size: 17px;
+    }
+
+    .post .page .page-title {
+        font-size: 2.1rem;
+    }
+}
+
+/* Notion export post readability */
+html body {
+    white-space: normal;
+}
+
+@media only screen {
+    html body {
+        margin: 60px auto;
+        width: 70%;
+        max-width: none;
+        padding: 0;
+        color: #333;
+    }
+
+    .post {
+        max-width: 900px;
+        margin: 2.5rem auto 4rem;
+    }
+}
+
+.post .page {
+    font-family: "Helvetica", "Arial", "Sans-Serif";
+    font-size: 18px;
+    line-height: 1.7;
+    white-space: normal;
+}
+
+.post .page p,
+.post .page li,
+.post .page .collection-content,
+.post .page .simple-table,
+.post .page .table_of_contents-item,
+.post .page .bookmark-title,
+.post .page .bookmark-description,
+.post .page .bookmark-href {
+    font-size: 1rem;
+    line-height: 1.7;
+}
+
+.post .page p {
+    margin: 0.85em 0;
+}
+
+.post .page li {
+    margin: 0.35em 0;
+}
+
+.post .page .page-title {
+    font-size: 2.4rem;
+    line-height: 1.15;
+    margin-bottom: 0.6em;
+}
+
+.post .page h1 {
+    font-size: 2rem;
+    margin-top: 2.2rem;
+}
+
+.post .page h2 {
+    font-size: 1.55rem;
+    margin-top: 1.8rem;
+}
+
+.post .page h3 {
+    font-size: 1.25rem;
+    margin-top: 1.4rem;
+}
+
+.post .page code,
+.post .page .code {
+    font-size: 0.95em;
+}
+
+.post .page pre.code,
+.post .page pre.code.code-wrap {
+    padding: 1.25em 1em;
+    border-radius: 8px;
+    overflow-x: auto;
+    white-space: pre !important;
+    word-break: normal !important;
+}
+
+.post .page pre.code code {
+    white-space: pre !important;
+    word-break: normal !important;
+}
+
+.post .page table {
+    width: 100%;
+    font-size: 0.95em;
+}
+
+.post .page th,
+.post .page td {
+    padding: 0.4em 0.6em;
+}
+
+@media only screen and (max-width: 900px) {
+    html body {
+        margin: 60px auto;
+        width: 92%;
+    }
+
+    .post {
+        margin: 2rem auto 3rem;
+    }
+
+    .post .page {
+        font-size: 17px;
+    }
+
+    .post .page .page-title {
+        font-size: 2.1rem;
+    }
+}

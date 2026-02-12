@@ -1,5 +1,5 @@
 current directory: /Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/http_parser.rb-0.8.0/ext/ruby_http_parser
-/System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/bin/ruby -I /System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/2.6.0 -r ./siteconf20260208-72035-196vjjh.rb extconf.rb
+/System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/bin/ruby -I /System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/2.6.0 -r ./siteconf20260212-31820-7jvi3t.rb extconf.rb
 creating Makefile
 
 current directory: /Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/http_parser.rb-0.8.0/ext/ruby_http_parser
@@ -465,4 +465,4 @@ ld: warning: search path '/AppleInternal/Library/BuildRoots/4~CB3uugBQxypsiyQCrI
 
 current directory: /Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/http_parser.rb-0.8.0/ext/ruby_http_parser
 make "DESTDIR=" install
-/usr/bin/install -c -m 0755 ruby_http_parser.bundle ./.gem.20260208-72035-17xh43d
+/usr/bin/install -c -m 0755 ruby_http_parser.bundle ./.gem.20260212-31820-n1g3sr

@@ -1,5 +1,5 @@
 current directory: /Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/ffi-1.15.4/ext/ffi_c
-/System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/bin/ruby -I /System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/2.6.0 -r ./siteconf20260208-72035-z0u77n.rb extconf.rb
+/System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/bin/ruby -I /System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/2.6.0 -r ./siteconf20260212-31820-1oz6c11.rb extconf.rb
 checking for ffi_prep_closure_loc() in -lffi... no
 checking for ffi_prep_closure_loc() in -llibffi... no
 checking for ffi_prep_closure_loc() in -llibffi-8... no
@@ -52,13 +52,13 @@ libtool: compile:  xcrun clang -DHAVE_CONFIG_H -I. -I/Users/huxiaojing/codes/sha
 libtool: compile:  xcrun clang -DHAVE_CONFIG_H -I. -I/Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/ffi-1.15.4/ext/ffi_c/libffi -I. -I/Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/ffi-1.15.4/ext/ffi_c/libffi/include -Iinclude -I/Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/ffi-1.15.4/ext/ffi_c/libffi/src -Wall -fexceptions -c /Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/ffi-1.15.4/ext/ffi_c/libffi/src/aarch64/ffi.c  -fno-common -DPIC -o src/aarch64/.libs/ffi.o
 /bin/sh ./libtool  --tag=CC   --mode=compile xcrun clang -DHAVE_CONFIG_H -I. -I/Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/ffi-1.15.4/ext/ffi_c/libffi  -I. -I/Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/ffi-1.15.4/ext/ffi_c/libffi/include -Iinclude -I/Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/ffi-1.15.4/ext/ffi_c/libffi/src  -I. -I/Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/ffi-1.15.4/ext/ffi_c/libffi/include -Iinclude -I/Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/ffi-1.15.4/ext/ffi_c/libffi/src  -c -o src/aarch64/sysv.lo /Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/ffi-1.15.4/ext/ffi_c/libffi/src/aarch64/sysv.S
 libtool: compile:  xcrun clang -DHAVE_CONFIG_H -I. -I/Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/ffi-1.15.4/ext/ffi_c/libffi -I. -I/Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/ffi-1.15.4/ext/ffi_c/libffi/include -Iinclude -I/Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/ffi-1.15.4/ext/ffi_c/libffi/src -I. -I/Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/ffi-1.15.4/ext/ffi_c/libffi/include -Iinclude -I/Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/ffi-1.15.4/ext/ffi_c/libffi/src -c /Users/huxiaojing/codes/sharyn/SharynHu.github.io/vendor/bundle/ruby/2.6.0/gems/ffi-1.15.4/ext/ffi_c/libffi/src/aarch64/sysv.S  -fno-common -DPIC -o src/aarch64/.libs/sysv.o
-/var/folders/1s/ltm3cjn16970xpjskh3spb4m0000gn/T/sysv-d3f2aa.s:27:2: error: invalid CFI advance_loc expression
+/var/folders/1s/ltm3cjn16970xpjskh3spb4m0000gn/T/sysv-514915.s:27:2: error: invalid CFI advance_loc expression
  .cfi_def_cfa x1, 32;
  ^
-/var/folders/1s/ltm3cjn16970xpjskh3spb4m0000gn/T/sysv-d3f2aa.s:176:2: error: invalid CFI advance_loc expression
+/var/folders/1s/ltm3cjn16970xpjskh3spb4m0000gn/T/sysv-514915.s:176:2: error: invalid CFI advance_loc expression
  .cfi_adjust_cfa_offset (8*2 + (8 * 16 + 8 * 8) + 64)
  ^
-/var/folders/1s/ltm3cjn16970xpjskh3spb4m0000gn/T/sysv-d3f2aa.s:274:2: error: invalid CFI advance_loc expression
+/var/folders/1s/ltm3cjn16970xpjskh3spb4m0000gn/T/sysv-514915.s:274:2: error: invalid CFI advance_loc expression
  .cfi_adjust_cfa_offset -(8*2 + (8 * 16 + 8 * 8) + 64)
  ^
 make[3]: *** [src/aarch64/sysv.lo] Error 1

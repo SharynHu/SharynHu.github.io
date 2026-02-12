@@ -3,10 +3,10 @@
 	"file": "style.css",
 	"sources": [
 		"style.scss",
-		"../../../../../Library/Ruby/Gems/2.6.0/gems/jekyll-theme-cayman-0.2.0/_sass/jekyll-theme-cayman.scss",
-		"../../../../../Library/Ruby/Gems/2.6.0/gems/jekyll-theme-cayman-0.2.0/_sass/normalize.scss",
-		"../../../../../Library/Ruby/Gems/2.6.0/gems/jekyll-theme-cayman-0.2.0/_sass/rouge-github.scss",
-		"../../../../../Library/Ruby/Gems/2.6.0/gems/jekyll-theme-cayman-0.2.0/_sass/variables.scss"
+		"vendor/bundle/ruby/3.2.0/gems/jekyll-theme-cayman-0.2.0/_sass/jekyll-theme-cayman.scss",
+		"vendor/bundle/ruby/3.2.0/gems/jekyll-theme-cayman-0.2.0/_sass/normalize.scss",
+		"vendor/bundle/ruby/3.2.0/gems/jekyll-theme-cayman-0.2.0/_sass/rouge-github.scss",
+		"vendor/bundle/ruby/3.2.0/gems/jekyll-theme-cayman-0.2.0/_sass/variables.scss"
 	],
 	"sourcesContent": [
 		"@import 'jekyll-theme-cayman';\n",

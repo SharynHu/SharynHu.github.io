@@ -30,16 +30,14 @@ Kernel configured for up to 8 processors.
 Processor type: arm64e (ARM64E)
 Processors active: 0 1 2 3 4 5 6 7
 Primary memory available: 16.00 gigabytes
-Default processor set: 782 tasks, 3864 threads, 8 processors
-Load average: 1.84, Mach factor: 6.17
+Default processor set: 751 tasks, 4377 threads, 8 processors
+Load average: 32.45, Mach factor: 0.25
 /bin/machine           = unknown
 /usr/bin/oslevel       = unknown
 /bin/universe          = unknown
 
-PATH: /Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/bin
+PATH: /Users/huxiaojing/anaconda2/bin
 PATH: /Users/huxiaojing/.antigravity/antigravity/bin
-PATH: /Users/huxiaojing/anaconda3/bin
-PATH: /Users/huxiaojing/anaconda3/condabin
 PATH: /usr/local/mysql/bin
 PATH: /anaconda2/bin
 PATH: /opt/local/bin
@@ -58,6 +56,19 @@ PATH: /var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinter
 PATH: /opt/pmk/env/global/bin
 PATH: /Library/Apple/usr/bin
 PATH: /Library/TeX/texbin
+PATH: /Users/huxiaojing/.codex/tmp/arg0/codex-arg0qKKyYd
+PATH: /Users/huxiaojing/.antigravity/antigravity/bin
+PATH: /Users/huxiaojing/anaconda3/bin
+PATH: /Users/huxiaojing/anaconda3/condabin
+PATH: /usr/local/mysql/bin
+PATH: /anaconda2/bin
+PATH: /opt/local/bin
+PATH: /opt/local/sbin
+PATH: /Library/Java/JavaVirtualMachines/jdk1.8.0_144.jdk/Contents/Home/bin
+PATH: /usr/local/sbin
+PATH: /usr/local/Cellar/tomcat/9.0.30/libexec/bin
+PATH: /Users/huxiaojing/.gem/ruby/2.6.0/bin
+PATH: /Users/huxiaojing/.vscode/extensions/openai.chatgpt-0.4.73-darwin-arm64/bin/macos-aarch64
 PATH: /usr/local/sbin
 PATH: /usr/local/Cellar/tomcat/9.0.30/libexec/bin
 PATH: /Users/huxiaojing/.gem/ruby/2.6.0/bin
@@ -882,7 +893,7 @@ configure:17477: checking for memfd_create
 configure:17477: xcrun clang -o conftest  -Wall -fexceptions   conftest.c  >&5
 Undefined symbols for architecture arm64:
   "_memfd_create", referenced from:
-      _main in conftest-472694.o
+      _main in conftest-f5b8f5.o
 ld: symbol(s) not found for architecture arm64
 clang: error: linker command failed with exit code 1 (use -v to see invocation)
 configure:17477: $? = 1
