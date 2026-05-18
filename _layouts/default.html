@@ -1,29 +1,58 @@
 <!DOCTYPE html>
-	<html>
-		<head>
-			<title>{{ page.title }}</title>
-			<!-- link to main stylesheet -->
-			<link rel="stylesheet" type="text/css" href="/css/main.css">
-		</head>
-		<body>
-			<nav>
-	    		<ul>
-	        		<li><a href="/">Home</a></li>
-		        	<li><a href="/about">About</a></li>
-	        		<li><a href="/blog">Blog</a></li>
-	    		</ul>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>{% if page.title == site.name %}{{ site.name }}{% else %}{{ page.title }} | {{ site.name }}{% endif %}</title>
+		<link rel="stylesheet" type="text/css" href="/css/main.css">
+		<link rel="stylesheet" href="/css/syntax.css">
+		<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+		<script type="text/x-mathjax-config">
+			MathJax.Hub.Config({
+				tex2jax: {
+					skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+					inlineMath: [['$','$']]
+				}
+			});
+		</script>
+	</head>
+	<body>
+		<header class="site-header">
+			<a class="site-title" href="/">{{ site.name }}</a>
+			<p class="site-tagline">Notes on computer science, systems, and machine learning.</p>
+			<nav class="site-nav">
+				<a href="/">Home</a>
+				<a href="/about">About</a>
+				<a href="/blog">Blog</a>
 			</nav>
-			<div class="container">
-			
+		</header>
+
+		<main class="container">
 			{{ content }}
-			
-			</div><!-- /.container -->
-			<footer>
-	    		<ul>
-	        		<li><span style="color:#999">E-mail:</span><a href="mailto:xiaojinghu826@gmail.com">xiaojinghu826@gmail.com</a></li>
-				<br/>
-				<li><span style="color:#999">GitHub:</span><a href="https://github.com/SharynHu">github.com/SharynHu</a></li>
-				</ul>
-			</footer>
-		</body>
-	</html>
+		</main>
+
+		<style>
+			html body {
+				max-width: none !important;
+				margin: 0 !important;
+				padding: 0 24px !important;
+				color: var(--text) !important;
+				background: var(--bg) !important;
+				white-space: normal !important;
+			}
+
+			.site-header,
+			.container,
+			.site-footer {
+				max-width: 860px !important;
+				margin-left: auto !important;
+				margin-right: auto !important;
+			}
+		</style>
+
+		<footer class="site-footer">
+			<a href="mailto:xiaojinghu826@gmail.com">xiaojinghu826@gmail.com</a>
+			<a href="https://github.com/SharynHu">github.com/SharynHu</a>
+		</footer>
+	</body>
+</html>

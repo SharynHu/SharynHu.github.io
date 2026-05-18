@@ -1,45 +1,99 @@
 <!DOCTYPE html>
-	<html>
-		<head>
-			<title>Sharyn's Blog</title>
-			<!-- link to main stylesheet -->
-			<link rel="stylesheet" type="text/css" href="/css/main.css">
-		</head>
-		<body>
-			<nav>
-	    		<ul>
-	        		<li><a href="/">Home</a></li>
-		        	<li><a href="/about">About</a></li>
-	        		<li><a href="/blog">Blog</a></li>
-	    		</ul>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>Sharyn's Blog | Sharyn Hu</title>
+		<link rel="stylesheet" type="text/css" href="/css/main.css">
+		<link rel="stylesheet" href="/css/syntax.css">
+		<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+		<script type="text/x-mathjax-config">
+			MathJax.Hub.Config({
+				tex2jax: {
+					skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+					inlineMath: [['$','$']]
+				}
+			});
+		</script>
+	</head>
+	<body>
+		<header class="site-header">
+			<a class="site-title" href="/">Sharyn Hu</a>
+			<p class="site-tagline">Notes on computer science, systems, and machine learning.</p>
+			<nav class="site-nav">
+				<a href="/">Home</a>
+				<a href="/about">About</a>
+				<a href="/blog">Blog</a>
 			</nav>
-			<div class="container">
-			
-				<h1>Sharyn's Blog</h1>
-	<ul class="posts">
-	  
-	    <li><span>12 Feb 2026</span> » <a href="/blog/2026/02/12/pre-norm-vs-post-norm" title="Pre-norm vs Post-norm">Pre-norm vs Post-norm</a></li>
-	  
-	    <li><span>12 Feb 2026</span> » <a href="/blog/2026/02/12/layernorm-vs-rmsnorm-what-s-different" title="LayerNorm vs RMSNorm: What’s different?">LayerNorm vs RMSNorm: What’s different?</a></li>
-	  
-	    <li><span>12 Feb 2026</span> » <a href="/blog/2026/02/12/flashattention-4-all-together-tiling-fusing" title="FlashAttention(4): All-together: tiling&fusing">FlashAttention(4): All-together: tiling&fusing</a></li>
-	  
-	    <li><span>12 Feb 2026</span> » <a href="/blog/2026/02/12/flashattention-3-online-softmax" title="FlashAttention(3): Online Softmax">FlashAttention(3): Online Softmax</a></li>
-	  
-	    <li><span>12 Feb 2026</span> » <a href="/blog/2026/02/12/flashattention-2-the-native-attention-and-its-constraints" title="FlashAttention(2): The native attention and its constraints">FlashAttention(2): The native attention and its constraints</a></li>
-	  
-	    <li><span>12 Feb 2026</span> » <a href="/blog/2026/02/12/flashattention-1-what-it-is-and-why-we-need-it" title="FlashAttention(1): What it is and why we need it">FlashAttention(1): What it is and why we need it</a></li>
-	  
-	</ul>
+		</header>
 
-			
-			</div><!-- /.container -->
-			<footer>
-	    		<ul>
-	        		<li><span style="color:#999">E-mail:</span><a href="mailto:xiaojinghu826@gmail.com">xiaojinghu826@gmail.com</a></li>
-				<br/>
-				<li><span style="color:#999">GitHub:</span><a href="https://github.com/SharynHu">github.com/SharynHu</a></li>
-				</ul>
-			</footer>
-		</body>
-	</html>
+		<main class="container">
+			<section class="page">
+	<header class="archive-header">
+	<h1>Sharyn's Blog</h1>
+	<p>Technical notes and implementation writeups.</p>
+</header>
+
+<section class="post-list">
+	
+	<article class="post-card">
+		<p class="post-card-date">12 Feb 2026</p>
+		<h2><a href="/blog/2026/02/12/pre-norm-vs-post-norm" title="Pre-norm vs Post-norm">Pre-norm vs Post-norm</a></h2>
+	</article>
+	
+	<article class="post-card">
+		<p class="post-card-date">12 Feb 2026</p>
+		<h2><a href="/blog/2026/02/12/layernorm-vs-rmsnorm-what-s-different" title="LayerNorm vs RMSNorm: What’s different?">LayerNorm vs RMSNorm: What’s different?</a></h2>
+	</article>
+	
+	<article class="post-card">
+		<p class="post-card-date">12 Feb 2026</p>
+		<h2><a href="/blog/2026/02/12/flashattention-4-all-together-tiling-fusing" title="FlashAttention(4): All-together: tiling&fusing">FlashAttention(4): All-together: tiling&fusing</a></h2>
+	</article>
+	
+	<article class="post-card">
+		<p class="post-card-date">12 Feb 2026</p>
+		<h2><a href="/blog/2026/02/12/flashattention-3-online-softmax" title="FlashAttention(3): Online Softmax">FlashAttention(3): Online Softmax</a></h2>
+	</article>
+	
+	<article class="post-card">
+		<p class="post-card-date">12 Feb 2026</p>
+		<h2><a href="/blog/2026/02/12/flashattention-2-the-native-attention-and-its-constraints" title="FlashAttention(2): The native attention and its constraints">FlashAttention(2): The native attention and its constraints</a></h2>
+	</article>
+	
+	<article class="post-card">
+		<p class="post-card-date">12 Feb 2026</p>
+		<h2><a href="/blog/2026/02/12/flashattention-1-what-it-is-and-why-we-need-it" title="FlashAttention(1): What it is and why we need it">FlashAttention(1): What it is and why we need it</a></h2>
+	</article>
+	
+</section>
+
+</section>
+
+		</main>
+
+		<style>
+			html body {
+				max-width: none !important;
+				margin: 0 !important;
+				padding: 0 24px !important;
+				color: var(--text) !important;
+				background: var(--bg) !important;
+				white-space: normal !important;
+			}
+
+			.site-header,
+			.container,
+			.site-footer {
+				max-width: 860px !important;
+				margin-left: auto !important;
+				margin-right: auto !important;
+			}
+		</style>
+
+		<footer class="site-footer">
+			<a href="mailto:xiaojinghu826@gmail.com">xiaojinghu826@gmail.com</a>
+			<a href="https://github.com/SharynHu">github.com/SharynHu</a>
+		</footer>
+	</body>
+</html>

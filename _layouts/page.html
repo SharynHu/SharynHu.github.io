@@ -1,29 +1,6 @@
-<!DOCTYPE html>
-	<html>
-		<head>
-			<title>{{ page.title }}</title>
-			<!-- link to main stylesheet -->
-			<link rel="stylesheet" type="text/css" href="/css/main.css">
-		</head>
-		<body>
-			<nav>
-	    		<ul>
-	        		<li><a href="/">Home</a></li>
-		        	<li><a href="/about">About</a></li>
-	        		<li><a href="/blog">Blog</a></li>
-	    		</ul>
-			</nav>
-			<div class="container">
-			
-			{{ content }}
-			
-			</div><!-- /.container -->
-			<footer>
-	    		<ul>
-	        		<li><span style="color:#999">E-mail:</span><a href="mailto:xiaojinghu826@gmail.com">xiaojinghu826@gmail.com</a></li>
-				<br/>
-				<li><span style="color:#999">GitHub:</span><a href="https://github.com/SharynHu">github.com/SharynHu</a></li>
-				</ul>
-			</footer>
-		</body>
-	</html>
+---
+layout: default
+---
+<section class="page">
+	{{ content }}
+</section>
