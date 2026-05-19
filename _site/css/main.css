@@ -222,6 +222,23 @@ pre code {
     text-align: center;
 }
 
+.page-nav {
+    margin: 0 0 2rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.page-nav a {
+    color: var(--muted);
+}
+
+.page-nav a:hover {
+    color: var(--text);
+}
+
 .archive-header p {
     color: var(--muted);
     font-family: var(--serif);
