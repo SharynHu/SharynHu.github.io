@@ -3,9 +3,14 @@
     --text: #333333;
     --muted: #8a8a8a;
     --border: #e5e5e5;
+    --header-bg: #eef4f8;
     --link: #4f8aa3;
     --link-hover: #2f647a;
     --surface: #ffffff;
+    --github-text: #24292f;
+    --github-muted: #57606a;
+    --github-border: #d0d7de;
+    --github-bg: #f6f8fa;
     --serif: Georgia, "Times New Roman", serif;
     --sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
     --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
@@ -51,6 +56,9 @@ a:hover {
     padding: 56px 0 36px;
     text-align: center;
     border-bottom: 1px solid var(--border);
+    background: var(--header-bg);
+    box-shadow: 0 0 0 100vmax var(--header-bg);
+    clip-path: inset(0 -100vmax);
 }
 
 .site-title {
@@ -347,6 +355,11 @@ pre code {
 .post {
     max-width: 1040px;
     margin: 0 auto;
+    padding: 34px 40px 46px;
+    border: 1px solid var(--github-border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--github-text);
 }
 
 .post-header {
@@ -356,15 +369,19 @@ pre code {
 
 .post-title {
     margin-bottom: 0;
-    font-size: 2.25rem;
+    color: var(--github-text);
+    font-family: var(--sans);
+    font-size: 2rem;
+    font-weight: 600;
     line-height: 1.2;
 }
 
 /* Reader-friendly overrides for Notion exports in posts */
 .post .page {
     font-family: var(--sans);
-    font-size: 18px;
-    line-height: 1.7;
+    color: var(--github-text);
+    font-size: 16px;
+    line-height: 1.65;
     white-space: normal !important;
 }
 
@@ -381,7 +398,7 @@ pre code {
 .post .page .bookmark-description,
 .post .page .bookmark-href {
     font-size: 1rem;
-    line-height: 1.7;
+    line-height: 1.65;
 }
 
 .post .page p {
@@ -399,9 +416,14 @@ pre code {
 .post .page h1 {
     counter-increment: section;
     counter-reset: subsection;
-    margin-top: 2.2rem;
+    margin: 2rem 0 1rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid var(--github-border);
+    color: var(--github-text);
+    font-family: var(--sans);
     font-size: 1.55rem !important;
-    line-height: 1.3 !important;
+    font-weight: 600;
+    line-height: 1.25 !important;
 }
 
 .post .page h1::before {
@@ -412,8 +434,13 @@ pre code {
 .post .page h2 {
     counter-increment: subsection;
     counter-reset: subsubsection;
-    margin-top: 1.8rem;
+    margin: 1.6rem 0 0.8rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--github-border);
+    color: var(--github-text);
+    font-family: var(--sans);
     font-size: 1.25rem !important;
+    font-weight: 600;
     line-height: 1.35 !important;
 }
 
@@ -424,8 +451,11 @@ pre code {
 
 .post .page h3 {
     counter-increment: subsubsection;
-    margin-top: 1.4rem;
+    margin: 1.35rem 0 0.65rem;
+    color: var(--github-text);
+    font-family: var(--sans);
     font-size: 1.1rem !important;
+    font-weight: 600;
     line-height: 1.35 !important;
 }
 
@@ -440,11 +470,19 @@ pre code {
     font-size: 0.95em;
 }
 
+.post .page :not(pre) > code {
+    padding: 0.2em 0.4em;
+    border-radius: 6px;
+    background: rgba(175, 184, 193, 0.2);
+}
+
 .post .page pre.code,
 .post .page pre.code.code-wrap {
     overflow-x: auto;
     padding: 1.25em 1em;
-    border-radius: 4px;
+    border: 1px solid var(--github-border);
+    border-radius: 6px;
+    background: var(--github-bg);
     white-space: pre !important;
     word-break: normal !important;
 }
@@ -461,7 +499,42 @@ pre code {
 
 .post .page th,
 .post .page td {
+    border: 1px solid var(--github-border);
     padding: 0.4em 0.6em;
+}
+
+.post .page th {
+    background: var(--github-bg);
+    font-weight: 600;
+}
+
+.post .page a {
+    color: #0969da;
+}
+
+.post .page a:hover {
+    text-decoration: underline;
+}
+
+.post .page .callout {
+    display: flex;
+    gap: 0.75rem;
+    margin: 1rem 0;
+    padding: 0.8rem 1rem;
+    border: 1px solid var(--github-border);
+    border-left: 4px solid #0969da;
+    border-radius: 6px;
+    background: var(--github-bg) !important;
+    white-space: normal !important;
+}
+
+.post .page figure {
+    margin: 1.4rem 0;
+}
+
+.post .page .equation {
+    overflow-x: auto;
+    padding: 0.75rem 0;
 }
 
 .post .page,
@@ -506,7 +579,11 @@ pre code {
         padding: 22px 20px;
     }
 
+    .post {
+        padding: 24px 18px 34px;
+    }
+
     .post .page {
-        font-size: 17px;
+        font-size: 16px;
     }
 }
