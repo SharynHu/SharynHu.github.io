@@ -6,3 +6,10 @@ kramdown:
 permalink: /blog/:year/:month/:day/:title
 exclude:
   - _site
+  - vendor
+  - vendor/bundle
+  - .bundle
+  - .jekyll-cache
+  - .sass-cache
+  - Gemfile
+  - Gemfile.lock
