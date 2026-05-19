@@ -1,10 +1,35 @@
 ---
 layout: default
 ---
+{%- assign current_lang = page.lang | default: "en" -%}
+{%- assign lang_ref = page.lang_ref | default: page.slug -%}
+{%- assign translations = site.posts | where: "lang_ref", lang_ref -%}
+{%- assign en_post = translations | where: "lang", "en" | first -%}
+{%- assign zh_post = translations | where: "lang", "zh" | first -%}
+{%- assign en_url = page.en_url -%}
+{%- assign zh_url = page.zh_url -%}
+{%- if en_post -%}{%- assign en_url = en_post.url -%}{%- endif -%}
+{%- if zh_post -%}{%- assign zh_url = zh_post.url -%}{%- endif -%}
 <article class="post">
 	<header class="post-header">
 		<p class="meta">{{ page.date | date_to_string }}</p>
 		<h1 class="post-title">{{ page.title }}</h1>
+		<nav class="language-switch" aria-label="Post language">
+			{%- if current_lang == "en" -%}
+				<span class="language-option is-active" aria-current="true">English</span>
+			{%- elsif en_url -%}
+				<a class="language-option" href="{{ en_url | relative_url }}">English</a>
+			{%- else -%}
+				<span class="language-option is-disabled" aria-disabled="true">English</span>
+			{%- endif -%}
+			{%- if current_lang == "zh" -%}
+				<span class="language-option is-active" aria-current="true">中文</span>
+			{%- elsif zh_url -%}
+				<a class="language-option" href="{{ zh_url | relative_url }}">中文</a>
+			{%- else -%}
+				<span class="language-option is-disabled" aria-disabled="true" title="Chinese version coming soon">中文</span>
+			{%- endif -%}
+		</nav>
 	</header>
 	{{ content }}
 </article>
