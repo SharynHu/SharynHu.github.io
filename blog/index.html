@@ -11,7 +11,8 @@ hide_header: true
 </header>
 
 <section class="post-list">
-	{% for post in site.posts %}
+	{% assign english_posts = site.posts | where: "lang", "en" %}
+	{% for post in english_posts %}
 	<article class="post-card">
 		<p class="post-card-date">{{ post.date | date_to_string }}</p>
 		<h2><a href="{{ post.url }}" title="{{ post.title }}">{{ post.title }}</a></h2>
