@@ -17,15 +17,17 @@
 		</script>
 	</head>
 	<body>
-		<header class="site-header">
-			<a class="site-title" href="/">{{ site.name }}</a>
-			<p class="site-tagline">Notes on computer science, systems, and machine learning.</p>
-			<nav class="site-nav">
-				<a href="/">Home</a>
-				<a href="/about">About</a>
-				<a href="/blog">Blog</a>
-			</nav>
-		</header>
+		{% unless page.hide_header %}
+			<header class="site-header">
+				<a class="site-title" href="/">{{ site.name }}</a>
+				<p class="site-tagline">Notes on computer science, systems, and machine learning.</p>
+				<nav class="site-nav">
+					<a href="/">Home</a>
+					<a href="/about">About</a>
+					<a href="/blog">Blog</a>
+				</nav>
+			</header>
+		{% endunless %}
 
 		<main class="container">
 			{{ content }}
