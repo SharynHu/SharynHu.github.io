@@ -461,7 +461,7 @@ pre code {
 
 .post .page h3::before {
     content: counter(section) "." counter(subsection) "." counter(subsubsection) " ";
-    color: var(--muted);
+    color: var(--github-muted);
 }
 
 .post .page code,
@@ -530,6 +530,15 @@ pre code {
 
 .post .page figure {
     margin: 1.4rem 0;
+}
+
+.post .page .notion-text-equation-token .katex {
+    font-size: 1.12em !important;
+}
+
+.post .page .katex-display,
+.post .page figure.equation .katex {
+    font-size: 1.18em !important;
 }
 
 .post .page .equation {
