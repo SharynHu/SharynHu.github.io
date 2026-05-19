@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>RadixAttention | Sharyn Hu</title>
+		<link rel="stylesheet" type="text/css" href="/css/main.css">
+		<link rel="stylesheet" href="/css/syntax.css">
+		<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+		<script type="text/x-mathjax-config">
+			MathJax.Hub.Config({
+				tex2jax: {
+					skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+					inlineMath: [['$','$']]
+				}
+			});
+		</script>
+	</head>
+	<body>
+		
+			<header class="site-header">
+				<a class="site-title" href="/">Sharyn Hu</a>
+				<p class="site-tagline">Notes on computer science, systems, and machine learning.</p>
+				<nav class="site-nav">
+					<a href="/">Home</a>
+					<a href="/blog">Blog</a>
+				</nav>
+			</header>
+		
+
+		<main class="container">
+			<article class="post">
+	<header class="post-header">
+		<p class="meta">19 May 2026</p>
+		<h1 class="post-title">RadixAttention</h1>
+		<nav class="language-switch" aria-label="Post language"><span class="language-option is-active" aria-current="true">English</span><span class="language-option is-disabled" aria-disabled="true" title="Chinese version coming soon">中文</span></nav>
+	</header>
+	<article class="page sans" id="radixattention">
+  <div class="page-body">
+    <p>RadixAttention is the KV cache management and sharing technique introduced by SGLang. It automatically reuses KV cache across requests when they share common prefixes, which happens frequently in real serving workloads.</p>
+
+    <h1>The problem it solves</h1>
+    <p><mark class="highlight-yellow_background"><strong>In a standard LLM serving system, every request gets its own independent KV cache.</strong></mark> <mark class="highlight-yellow_background"><strong>When a request ends, that cache is usually discarded.</strong></mark> This is fine if every request is unique, but <mark class="highlight-yellow_background"><strong>real LLM traffic often has massive prefix overlap.</strong></mark></p>
+
+    <details>
+      <summary><strong>1. System prompts</strong></summary>
+      <p><strong>The scenario:</strong> When you use an app like ChatGPT or a company support bot, the developers silently prepend a large system prompt to your message before sending it to the LLM.</p>
+      <p><strong>The example:</strong> Imagine an e-commerce support bot.</p>
+      <ul>
+        <li><strong>User A asks:</strong> <code>Where is my order?</code></li>
+        <li><strong>What the LLM actually sees:</strong> <code>[You are a helpful customer support bot for ShoeStore Inc. Never use bad language. Always be polite. If you don't know the answer, say so. Returns are allowed within 30 days... (2,000 words of instructions)]</code> + <em><code>"Where is my order?"</code></em></li>
+        <li><strong>User B asks:</strong> <code>Do you sell red boots?</code></li>
+        <li><strong>What the LLM actually sees:</strong> the same 2,000-word system prompt + <em><code>"Do you sell red boots?"</code></em></li>
+      </ul>
+      <p><strong>The overlap:</strong> If 10,000 customers talk to the bot, a standard system reads and computes those exact same 2,000 words 10,000 separate times. RadixAttention computes the shared prefix once, keeps it in the cache while it remains resident, and applies it to many users.</p>
+    </details>
+
+    <details>
+      <summary><strong>2. Few-shot examples and RAG pipelines</strong></summary>
+      <p><strong>The scenario:</strong> In Retrieval-Augmented Generation, the application searches a database for documents and pastes them into the prompt. Users often ask multiple questions about the same documents.</p>
+      <p><strong>The example:</strong> You upload a 50-page healthcare policy PDF to an AI assistant.</p>
+      <ul>
+        <li><strong>Query 1:</strong> <code>[Here is the document: (50 pages of healthcare policy text)]</code> + <em><code>"Does this cover dental?"</code></em></li>
+        <li><strong>Query 2:</strong> <code>[Here is the document: (50 pages of healthcare policy text)]</code> + <em><code>"What is the copay for a specialist?"</code></em></li>
+        <li><strong>Query 3:</strong> <code>[Here is the document: (50 pages of healthcare policy text)]</code> + <em><code>"Can I add my spouse?"</code></em></li>
+      </ul>
+      <p><strong>The overlap:</strong> The 50-page PDF prefix is identical every time. Without caching, the LLM reads all 50 pages from scratch for every question. With prefix caching, the shared document prefix can be reused and the model only needs to prefill the new question suffix.</p>
+    </details>
+
+    <details>
+      <summary><strong>3. Multi-turn conversations</strong></summary>
+      <p><strong>The scenario:</strong> As a chat goes on, the model needs the previous turns as context. Most chat systems feed the full conversation history back into the model on each turn.</p>
+      <p><strong>The example:</strong> You are writing code with an AI.</p>
+      <ul>
+        <li><strong>Turn 1:</strong> <em>Write a Python script to scrape a website.</em> -> AI outputs a script.</li>
+        <li><strong>Turn 2:</strong> <code>[Turn 1 + AI Script]</code> + <em><code>"Can you add error handling to this?"</code></em> -> AI outputs an updated script.</li>
+        <li><strong>Turn 3:</strong> <code>[Turn 1 + AI Script + Turn 2 + AI Updated Script]</code> + <em><code>"Now make it run 10 times faster."</code></em></li>
+      </ul>
+      <p><strong>The overlap:</strong> By turn 10, the history might be 15,000 tokens long. On turn 11, a standard system recalculates all 15,000 previous tokens. A RadixAttention system can recognize that the previous history is already represented in the radix tree and only prefill the newest suffix.</p>
+    </details>
+
+    <details>
+      <summary><strong>4. Agents and tool-calling loops</strong></summary>
+      <p><strong>The scenario:</strong> Autonomous agents operate in loops. They are given a goal, think about what to do, call tools, read tool results, and then repeat. Each iteration appends new text to the original instructions.</p>
+      <p><strong>The example:</strong> You give an agent the goal: <em><code>"Find the weather in Tokyo and email it to Bob."</code></em></p>
+      <ul>
+        <li><strong>Loop 1:</strong> <code>[Agent Instructions] + [Goal: Find weather and email Bob]</code><br><em>AI action:</em> <code>"Search: Weather in Tokyo"</code> -> <em>result:</em> <code>"75 degrees and sunny"</code>.</li>
+        <li><strong>Loop 2:</strong> <code>[Agent Instructions] + [Goal] + [Action 1] + [Result 1]</code><br><em>AI action:</em> <code>"Find Bob's email address"</code> -> <em>result:</em> <code>"bob@email.com"</code>.</li>
+        <li><strong>Loop 3:</strong> <code>[Agent Instructions] + [Goal] + [Action 1] + [Result 1] + [Action 2] + [Result 2]</code><br><em>AI action:</em> <code>"Send Email to bob@email.com: It is 75 degrees."</code></li>
+      </ul>
+      <p><strong>The overlap:</strong> An agent might need 15 loops to finish a complex task. Every loop contains the master instructions and the previous action log. Prefix caching eliminates redundant processing of the unchanged prefix.</p>
+      <p>Without prefix sharing, a 2,000-token system prompt served to 1,000 users costs 2 million redundant prefill-token computations per round.</p>
+    </details>
+
+    <h1>The core idea: store the KV cache in a radix tree</h1>
+    <p>A radix tree, also called a compressed trie, is a tree where <mark class="highlight-pink_background"><strong>each path from the root represents a sequence, and nodes can be shared between sequences with common prefixes.</strong></mark> RadixAttention uses a radix tree <mark class="highlight-pink_background">keyed by <strong>token IDs</strong></mark> to index the KV cache.</p>
+
+    <figure>
+      <img src="/assets/radixattention/radix-tree-kv-cache.png" alt="Color illustration of a radix tree showing shared prompt prefixes and cached KV branches">
+      <figcaption>Color-coded radix tree: the shared system prompt prefix is stored once, while request-specific suffixes branch below it.</figcaption>
+    </figure>
+
+    <p>Each node stores the KV cache for a span of tokens. When a new request comes in, the system walks the tree matching token-by-token against the request input. Any prefix that matches an existing path is reused directly, with no recomputation.</p>
+
+    <figure>
+      <img src="/assets/radixattention/radix-node-structure.svg" alt="RadixAttention node structure with key, value, children, and metadata fields">
+      <figcaption>A RadixAttention node stores a compressed token span, KV block pointers, child branches keyed by the next token, and eviction metadata.</figcaption>
+    </figure>
+
+    <h1>How a request gets served</h1>
+    <p>When a request with tokens <code>[t_1, t_2, ..., t_n]</code> arrives:</p>
+    <ol>
+      <li><strong>Prefix match:</strong> walk the radix tree from the root, matching tokens. If the longest matching prefix is <code>[t_1, ..., t_k]</code>, the KV cache for those <code>k</code> tokens already exists and can be reused.</li>
+      <li><strong>Prefill the rest:</strong> run the model forward on <code>[t_{k+1}, ..., t_n]</code>. During this forward pass, the attention layers attend to all previous tokens, including cached ones.</li>
+      <li><strong>Add new nodes:</strong> as new tokens are processed and generated, extend the radix tree with the new path so future requests can benefit.</li>
+      <li><strong>Reference counting:</strong> each node tracks how many active requests are using it. When the count drops to zero, the node can become eligible for eviction.</li>
+    </ol>
+
+    <h1>RadixAttention eviction policy</h1>
+    <p><strong>Eligibility: what can be evicted?</strong></p>
+    <ul>
+      <li>The node must have <code>ref_count == 0</code>, meaning no active request is using that node span.</li>
+      <li>The node must be a <strong>leaf</strong>. Evicting leaves first keeps common ancestors reusable until they also become leaves.</li>
+      <li>The node must not be pinned by an implementation-specific protection mechanism.</li>
+    </ul>
+    <p>The leaf constraint is structural: evicting an internal node while its descendants remain would break the prefix dependency of those descendants.</p>
+
+    <p><strong>Ordering: which eligible node gets evicted first?</strong></p>
+    <p>Among eligible leaves, eviction is LRU-ordered by last-access time. Each node carries a <code>last_access</code> timestamp, updated whenever the node is matched during prefix lookup or becomes evictable.</p>
+    <p><mark class="highlight-pink_background">The oldest <code>last_access</code> among evictable leaves gets evicted first.</mark></p>
+
+    <p><strong>Trigger: when does eviction run?</strong></p>
+    <p><mark class="highlight-pink_background">Eviction is demand-driven by allocation pressure.</mark> When a new block allocation fails because the memory pool is exhausted, the cache manager walks evictable leaves and evicts them until enough blocks are freed.</p>
+
+    <p><strong>Cascading:</strong> After a leaf is evicted, its parent may become a new leaf. If that parent also has <code>ref_count == 0</code>, it can become eligible in the next eviction round. A single allocation attempt can evict a chain of stale prefix nodes if none are in use.</p>
+
+    <p><strong>Coalescing:</strong> If eviction leaves a non-leaf node with exactly one remaining child, an implementation may merge the two back into a single compressed span to keep the tree compact. This saves memory and lookup cost but adds implementation complexity.</p>
+
+    <p><strong>Concise algorithm:</strong></p>
+<pre class="code code-wrap language-python"><code>def evict_to_free(blocks_needed):
+    freed = 0
+    # Walk the LRU list from oldest to newest
+    for node in lru_list.iterate_oldest_first():
+        if node.ref_count != 0:
+            continue            # pinned by active request
+        if node.has_children():
+            continue            # not a leaf
+
+        # Evict this node
+        free_blocks(node.kv_indices)
+        parent = node.parent
+        parent.children.pop(node.key[0])
+        remove_from_tree(node)
+        freed += len(node.kv_indices)
+
+        if freed >= blocks_needed:
+            return True
+
+    return False  # couldn't free enough; admission must wait</code></pre>
+
+    <h1>Why "radix" specifically?</h1>
+    <p>A radix tree compresses chains of single-child nodes into one. A path like <code>"The" -> " quick" -> " brown" -> " fox"</code> becomes one node holding the whole phrase rather than four separate nodes.</p>
+    <p>This keeps the tree compact and makes matching fast because the runtime can skip over long unique suffixes in one step instead of walking node by node.</p>
+
+    <h1>The concrete win</h1>
+    <p>The SGLang paper reports up to <strong>6.4x higher throughput</strong> and up to <strong>3.7x lower latency</strong> across its benchmark suite. RadixAttention is one major contributor, especially on workloads with prefix sharing such as agents, multi-turn chat, few-shot tasks, and RAG pipelines.</p>
+    <p>The exact speedup depends on how much prefix overlap the workload has:</p>
+    <ul>
+      <li><strong>No sharing:</strong> close to standard serving, with small metadata overhead.</li>
+      <li><strong>Moderate sharing:</strong> system prompt plus varied queries can reduce redundant prefill substantially.</li>
+      <li><strong>Heavy sharing:</strong> agent loops, tool use, multi-turn conversations, and repeated RAG contexts can benefit the most.</li>
+    </ul>
+    <p>RadixAttention is essentially free performance on workloads that already have shared structure, which many real workloads do.</p>
+
+    <h1>How it differs from other caching approaches</h1>
+    <ul>
+      <li><strong>Session-based caching:</strong> the application manages which requests share cache, often through explicit session IDs. This works, but it requires application-level cooperation.</li>
+      <li><strong>Hash-based prefix caching:</strong> the system hashes blocks of tokens and reuses blocks with matching hashes. This works, but block alignment and eviction can be less natural than tree-structured prefix sharing.</li>
+      <li><strong>RadixAttention:</strong> automatic token-level matching with a natural tree structure for insertion, reference counting, and LRU eviction.</li>
+    </ul>
+    <p>The radix tree approach is conceptually close to how filesystems or git-like content stores deduplicate shared structure: common prefixes are represented once and reused structurally.</p>
+
+    <p><strong>Actual cache residency depends on deployment:</strong></p>
+    <ul>
+      <li><strong>GPU cache in RadixAttention:</strong> usually short-lived under load because it competes with active request KV memory.</li>
+      <li><strong>Host or hierarchical cache:</strong> SGLang HiCache extends the same idea to host memory and distributed storage, which can extend residency, but entries are still subject to eviction, configuration, and compatibility constraints.</li>
+      <li><strong>Long-term user sessions:</strong> a conversation from yesterday should not be assumed to remain in GPU RadixAttention cache. Persistent application state still needs application storage, summarization, retrieval, or experimental KV serialization.</li>
+    </ul>
+
+    <p>So RadixAttention helps most when reuse happens soon enough for the prefix KV cache to remain resident:</p>
+    <ul>
+      <li>within an active conversation, where the next turn arrives seconds later;</li>
+      <li>across concurrent requests sharing a system prompt;</li>
+      <li>inside agent loops where tool calls happen in rapid succession;</li>
+      <li>inside repeated RAG or few-shot workloads with common prompt prefixes.</li>
+    </ul>
+
+    <p><strong>What about truly long-term reuse?</strong></p>
+    <ol>
+      <li><strong>Application-level caching:</strong> store raw conversation history in a database such as Redis or Postgres. When the user returns, construct the prompt from history plus the new message. The KV cache may still be rebuilt by prefill.</li>
+      <li><strong>KV cache serialization:</strong> research and engineering systems can serialize KV cache to disk or object storage, keyed by conversation or prefix. This is complex because KV cache is tied to model weights, quantization, RoPE settings, position encoding, and runtime layout.</li>
+      <li><strong>Summarization:</strong> long-running conversations can be summarized into compact context before prefill. This reduces cost but is a quality tradeoff, not true cache reuse.</li>
+      <li><strong>Retrieval-augmented memory:</strong> instead of passing full history, retrieve relevant chunks from storage. This keeps the prefix smaller and more predictable.</li>
+    </ol>
+
+    <h1>Implications for serving</h1>
+    <p>RadixAttention changes what efficient serving looks like:</p>
+    <ul>
+      <li><strong>Large system prompts become cheaper:</strong> they can be prefilled once and shared across many users while the cache remains resident.</li>
+      <li><strong>Multi-turn conversations become cheaper:</strong> each turn can prefill only the new suffix instead of the entire history.</li>
+      <li><strong>Workload shaping matters:</strong> if the serving system can order or batch requests with shared prefixes together, it can improve cache hit rates. SGLang includes cache-aware scheduling for this reason.</li>
+    </ul>
+  </div>
+</article>
+
+</article>
+
+		</main>
+
+
+		<style>
+			html body {
+				max-width: none !important;
+				margin: 0 !important;
+				padding: 0 24px !important;
+				color: var(--text) !important;
+				background: var(--bg) !important;
+				white-space: normal !important;
+			}
+
+			.site-header,
+			.container,
+			.site-footer {
+				max-width: 1120px !important;
+				margin-left: auto !important;
+				margin-right: auto !important;
+			}
+
+			.site-header {
+				background: var(--header-bg) !important;
+				box-shadow: 0 0 0 100vmax var(--header-bg) !important;
+				clip-path: inset(0 -100vmax) !important;
+			}
+
+			.site-header a,
+			.site-nav a,
+			.site-footer a {
+				text-decoration: none !important;
+			}
+
+			.post {
+				max-width: 1040px !important;
+				padding: 34px 40px 46px !important;
+				border: 1px solid var(--github-border) !important;
+				border-radius: 6px !important;
+				background: var(--surface) !important;
+				color: var(--github-text) !important;
+			}
+
+			.post-header {
+				margin-bottom: 2.25rem !important;
+				text-align: left !important;
+			}
+
+			.post-title {
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 2rem !important;
+				font-weight: 600 !important;
+				line-height: 1.2 !important;
+			}
+
+			.post .page,
+			.post .page-body {
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 16px !important;
+				line-height: 1.65 !important;
+				text-align: left !important;
+				white-space: normal !important;
+			}
+
+			.post .page-body {
+				counter-reset: section;
+			}
+
+			.post .page p,
+			.post .page li,
+			.post .page .collection-content,
+			.post .page .simple-table,
+			.post .page .table_of_contents-item,
+			.post .page .bookmark-title,
+			.post .page .bookmark-description,
+			.post .page .bookmark-href {
+				color: var(--github-text) !important;
+				font-size: 1rem !important;
+				line-height: 1.65 !important;
+			}
+
+
+			.language-switch {
+				display: inline-flex !important;
+				gap: 4px !important;
+				margin-top: 1rem !important;
+				padding: 3px !important;
+				border: 1px solid var(--github-border) !important;
+				border-radius: 999px !important;
+				background: var(--github-bg) !important;
+				font-family: var(--sans) !important;
+			}
+
+			.language-option {
+				display: inline-flex !important;
+				align-items: center !important;
+				min-height: 30px !important;
+				padding: 0.25rem 0.8rem !important;
+				border-radius: 999px !important;
+				color: var(--github-muted) !important;
+				font-size: 0.78rem !important;
+				font-weight: 700 !important;
+				letter-spacing: 0.04em !important;
+				line-height: 1 !important;
+				text-decoration: none !important;
+			}
+
+			.language-option:hover {
+				color: var(--github-text) !important;
+				text-decoration: none !important;
+			}
+
+			.language-option.is-active {
+				background: var(--surface) !important;
+				color: var(--github-text) !important;
+				box-shadow: 0 1px 2px rgba(31, 35, 40, 0.08) !important;
+			}
+
+			.language-option.is-disabled {
+				color: #8c959f !important;
+				cursor: not-allowed !important;
+			}
+
+
+			.translation-note {
+				margin: 1.5rem 0 0 !important;
+				padding: 1.1rem 1.25rem !important;
+				border: 1px solid var(--github-border) !important;
+				border-left: 4px solid #0969da !important;
+				border-radius: 6px !important;
+				background: var(--github-bg) !important;
+			}
+
+			.translation-note .eyebrow {
+				margin-bottom: 0.55rem !important;
+				color: var(--github-muted) !important;
+				font-size: 0.78rem !important;
+				font-weight: 700 !important;
+				letter-spacing: 0.08em !important;
+				text-transform: uppercase !important;
+			}
+
+			.translation-note p:last-child {
+				margin-bottom: 0 !important;
+			}
+
+			.post .page h1 {
+				counter-increment: section;
+				counter-reset: subsection;
+				margin: 2rem 0 1rem !important;
+				padding-bottom: 0.35rem !important;
+				border-bottom: 1px solid var(--github-border) !important;
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 1.55rem !important;
+				font-weight: 600 !important;
+				line-height: 1.3 !important;
+			}
+
+			.post .page h1::before {
+				content: counter(section) ". ";
+				color: var(--github-muted);
+			}
+
+			.post .page h2 {
+				counter-increment: subsection;
+				counter-reset: subsubsection;
+				margin: 1.6rem 0 0.8rem !important;
+				padding-bottom: 0.25rem !important;
+				border-bottom: 1px solid var(--github-border) !important;
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 1.25rem !important;
+				font-weight: 600 !important;
+				line-height: 1.35 !important;
+			}
+
+			.post .page h2::before {
+				content: counter(section) "." counter(subsection) " ";
+				color: var(--github-muted);
+			}
+
+			.post .page h3 {
+				counter-increment: subsubsection;
+				margin: 1.35rem 0 0.65rem !important;
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 1.1rem !important;
+				font-weight: 600 !important;
+				line-height: 1.35 !important;
+			}
+
+			.post .page h3::before {
+				content: counter(section) "." counter(subsection) "." counter(subsubsection) " ";
+				color: var(--github-muted);
+			}
+
+			.post .page :not(pre) > code {
+				padding: 0.2em 0.4em !important;
+				border-radius: 6px !important;
+				background: rgba(175, 184, 193, 0.2) !important;
+				color: black !important;
+			}
+
+			.post .page pre.code,
+			.post .page pre.code.code-wrap {
+				overflow-x: auto !important;
+				padding: 1.25em 1em !important;
+				border: 1px solid var(--github-border) !important;
+				border-radius: 6px !important;
+				background: var(--github-bg) !important;
+				white-space: pre !important;
+				word-break: normal !important;
+			}
+
+			.post .page pre.code code {
+				white-space: pre !important;
+				word-break: normal !important;
+			}
+
+			.post .page table {
+				width: 100% !important;
+				border-collapse: collapse !important;
+			}
+
+			.post .page th,
+			.post .page td {
+				border: 1px solid var(--github-border) !important;
+				padding: 0.45rem 0.65rem !important;
+			}
+
+			.post .page th {
+				background: var(--github-bg) !important;
+				font-weight: 600 !important;
+			}
+
+			.post .page a {
+				color: #0969da !important;
+			}
+
+			.post .page a:hover {
+				text-decoration: underline !important;
+			}
+
+			.post .page .callout {
+				display: flex !important;
+				gap: 0.75rem !important;
+				margin: 1rem 0 !important;
+				padding: 0.8rem 1rem !important;
+				border: 1px solid var(--github-border) !important;
+				border-left: 4px solid #0969da !important;
+				border-radius: 6px !important;
+				background: var(--github-bg) !important;
+				white-space: normal !important;
+			}
+
+			.post .page figure {
+				margin: 1.4rem 0 !important;
+			}
+
+			.post .page .notion-text-equation-token .katex {
+				font-size: 1.12em !important;
+			}
+
+			.post .page .katex-display,
+			.post .page figure.equation .katex {
+				font-size: 1.18em !important;
+			}
+
+			.post .page .equation {
+				overflow-x: auto !important;
+				padding: 0.75rem 0 !important;
+			}
+
+			@media only screen and (max-width: 720px) {
+				.post {
+					padding: 24px 18px 34px !important;
+				}
+			}
+		</style>
+
+		<footer class="site-footer">
+			<a href="mailto:sharynhu826@gmail.com">sharynhu826@gmail.com</a>
+			<a href="https://github.com/SharynHu">github.com/SharynHu</a>
+		</footer>
+	</body>
+</html>

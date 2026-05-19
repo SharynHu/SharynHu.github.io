@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900" role="img" aria-labelledby="title desc">
+  <title id="title">RadixAttention cache node structure</title>
+  <desc id="desc">A RadixAttention node contains a token-sequence key, KV block pointer values, child pointers keyed by starting token, and metadata such as reference count and last access time.</desc>
+  <defs>
+    <style>
+      .page { fill: #f6f8fa; }
+      .outer { fill: #ffffff; stroke: #8c959f; stroke-width: 3; }
+      .section { stroke-width: 2.5; rx: 14; }
+      .key { fill: #fff4ce; stroke: #d29922; }
+      .value { fill: #ddf4ff; stroke: #0969da; }
+      .children { fill: #eafaf0; stroke: #2da44e; }
+      .meta { fill: #f4edff; stroke: #8250df; }
+      .label { font: 700 31px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #24292f; }
+      .section-title { font: 700 25px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #24292f; }
+      .mono { font: 500 24px "SFMono-Regular", Menlo, Consolas, monospace; fill: #24292f; }
+      .muted { font: 500 22px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #57606a; }
+      .note { font: 600 22px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #cf222e; }
+      .arrow { fill: none; stroke: #cf222e; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#cf222e"/>
+    </marker>
+  </defs>
+
+  <rect class="page" width="1280" height="900" rx="18"/>
+  <rect x="90" y="54" width="760" height="790" class="outer" rx="24"/>
+  <text x="130" y="110" class="label">Node</text>
+  <text x="225" y="110" class="muted">one compressed radix-tree span</text>
+
+  <rect x="130" y="145" width="680" height="145" class="section key"/>
+  <text x="165" y="190" class="section-title">key</text>
+  <text x="225" y="190" class="muted">token sequence</text>
+  <text x="165" y="238" class="mono">[101, 57, 2048, ..., 3]</text>
+  <text x="575" y="238" class="muted">many tokens</text>
+
+  <rect x="130" y="330" width="680" height="130" class="section value"/>
+  <text x="165" y="375" class="section-title">value</text>
+  <text x="165" y="423" class="mono">list of KV block pointers</text>
+
+  <rect x="130" y="500" width="680" height="205" class="section children"/>
+  <text x="165" y="545" class="section-title">children</text>
+  <text x="285" y="545" class="mono">{</text>
+  <text x="190" y="590" class="mono">token_X  →  Child Node A</text>
+  <text x="190" y="630" class="mono">token_Y  →  Child Node B</text>
+  <text x="190" y="670" class="mono">token_Z  →  Child Node C</text>
+  <text x="285" y="700" class="mono">}</text>
+
+  <path class="arrow" d="M690 630 C805 630 850 650 910 650"/>
+  <rect x="920" y="597" width="280" height="105" fill="#fff1f3" stroke="#cf222e" stroke-width="2.5" rx="14"/>
+  <text x="948" y="637" class="note">No two children</text>
+  <text x="948" y="668" class="note">share the same</text>
+  <text x="948" y="699" class="note">starting token.</text>
+
+  <rect x="130" y="745" width="680" height="70" class="section meta"/>
+  <text x="165" y="790" class="mono">ref_count, last_access, etc.</text>
+</svg>
