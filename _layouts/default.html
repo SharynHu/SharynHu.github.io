@@ -44,9 +44,68 @@
 			.site-header,
 			.container,
 			.site-footer {
-				max-width: 860px !important;
+				max-width: 1120px !important;
 				margin-left: auto !important;
 				margin-right: auto !important;
+			}
+
+			.site-header a,
+			.site-nav a,
+			.site-footer a {
+				text-decoration: none !important;
+			}
+
+			.post {
+				max-width: 1040px !important;
+			}
+
+			.post-header {
+				margin-bottom: 2.25rem !important;
+				text-align: left !important;
+			}
+
+			.post-title {
+				font-size: 2.25rem !important;
+				line-height: 1.2 !important;
+			}
+
+			.post .page-body {
+				counter-reset: section;
+			}
+
+			.post .page h1 {
+				counter-increment: section;
+				counter-reset: subsection;
+				font-size: 1.55rem !important;
+				line-height: 1.3 !important;
+			}
+
+			.post .page h1::before {
+				content: counter(section) ". ";
+				color: var(--muted);
+			}
+
+			.post .page h2 {
+				counter-increment: subsection;
+				counter-reset: subsubsection;
+				font-size: 1.25rem !important;
+				line-height: 1.35 !important;
+			}
+
+			.post .page h2::before {
+				content: counter(section) "." counter(subsection) " ";
+				color: var(--muted);
+			}
+
+			.post .page h3 {
+				counter-increment: subsubsection;
+				font-size: 1.1rem !important;
+				line-height: 1.35 !important;
+			}
+
+			.post .page h3::before {
+				content: counter(section) "." counter(subsection) "." counter(subsubsection) " ";
+				color: var(--muted);
 			}
 		</style>
 
