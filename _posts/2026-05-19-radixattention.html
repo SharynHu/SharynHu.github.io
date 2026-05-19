@@ -107,7 +107,7 @@ lang_ref: radixattention
     <p><strong>Coalescing:</strong> If eviction leaves a non-leaf node with exactly one remaining child, an implementation may merge the two back into a single compressed span to keep the tree compact. This saves memory and lookup cost but adds implementation complexity.</p>
 
     <p><strong>Concise algorithm:</strong></p>
-<pre class="code code-wrap language-python"><code>def evict_to_free(blocks_needed):
+<pre class="code code-wrap language-python"><code class="language-python">def evict_to_free(blocks_needed):
     freed = 0
     # Walk the LRU list from oldest to newest
     for node in lru_list.iterate_oldest_first():

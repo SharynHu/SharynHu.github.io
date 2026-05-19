@@ -554,6 +554,7 @@ pre code {
 }
 
 .post .page pre.code code {
+    color: #37352f !important;
     white-space: pre !important;
     word-break: normal !important;
 }
