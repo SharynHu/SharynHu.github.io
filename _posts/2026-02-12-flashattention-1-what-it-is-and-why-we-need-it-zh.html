@@ -1,12 +1,24 @@
 ---
 layout: post
-title: "FlashAttention(1)：它是什么，以及我们为什么需要它"
+title: "FlashAttention(1)：它是什么，以及为什么需要它"
 date: 2026-02-12
 lang: zh
 lang_ref: flashattention-1-what-it-is-and-why-we-need-it
 ---
-<section class="translation-note">
-	<p class="eyebrow">中文版本</p>
-	<p>这篇笔记介绍 FlashAttention 的基本动机：标准 Attention 在长序列下会产生巨大的中间矩阵，真正的瓶颈往往不是计算量，而是显存读写和数据搬运。</p>
-	<p>完整中文翻译会继续补充。你可以先通过上方的 <strong>English</strong> 按钮回到英文原文。</p>
-</section>
+<article class="page sans"><div class="page-body">
+<div style="display:contents" dir="auto"><p>这篇笔记讨论 FlashAttention 的动机。核心问题不是 Transformer Attention 的数学公式太复杂，而是标准实现会在显存里产生一个巨大的中间矩阵，导致 GPU 把大量时间花在 HBM 读写上。</p></div>
+<div style="display:contents" dir="auto"><h1>标准 Attention 做了什么</h1></div>
+<div style="display:contents" dir="auto"><p>给定 query、key、value 矩阵 <span class="notion-text-equation-token">\(Q,K,V\)</span>，标准 scaled dot-product attention 是：</p></div>
+<div style="display:contents" dir="auto"><figure class="equation"><div class="equation-container">\[ O = \operatorname{softmax}\left(\frac{QK^T}{\sqrt{d}}\right)V \]</div></figure></div>
+<div style="display:contents" dir="auto"><p>如果序列长度是 <span class="notion-text-equation-token">\(N\)</span>，那么 <span class="notion-text-equation-token">\(QK^T\)</span> 的形状是 <span class="notion-text-equation-token">\(N \times N\)</span>。这个矩阵会随着序列长度平方增长。</p></div>
+<div style="display:contents" dir="auto"><h1>真正的瓶颈：内存而不是计算</h1></div>
+<div style="display:contents" dir="auto"><p>现代 GPU 的计算能力非常强，但 HBM 显存带宽相对昂贵。标准 Attention 的朴素实现通常会：</p></div>
+<div style="display:contents" dir="auto"><ul><li>从 HBM 读取 <span class="notion-text-equation-token">\(Q,K,V\)</span>。</li><li>计算并写出完整 attention score 矩阵。</li><li>读取这个矩阵做 softmax。</li><li>再写出概率矩阵。</li><li>最后读取概率矩阵并乘以 <span class="notion-text-equation-token">\(V\)</span>。</li></ul></div>
+<div style="display:contents" dir="auto"><p>这里的问题是：很多中间结果只需要短暂存在，却被写入了慢得多的 HBM。</p></div>
+<div style="display:contents" dir="auto"><h1>FlashAttention 的想法</h1></div>
+<div style="display:contents" dir="auto"><p>FlashAttention 的核心思想是：不要 materialize 完整的 <span class="notion-text-equation-token">\(N \times N\)</span> attention 矩阵。它把计算拆成 block，把小块数据放进 GPU 更快的 SRAM/shared memory 里，在块内完成 score、softmax 和 value 加权累积。</p></div>
+<div style="display:contents" dir="auto"><p>因为 softmax 需要全局归一化，FlashAttention 还需要 online softmax 技巧，在分块处理时维护每一行的最大值和归一化因子。</p></div>
+<div style="display:contents" dir="auto"><h1>为什么它重要</h1></div>
+<div style="display:contents" dir="auto"><p>FlashAttention 没有改变 Attention 的数学结果。它改变的是计算组织方式和内存访问模式。</p></div>
+<div style="display:contents" dir="ltr"><figure class="block-color-gray_background callout" style="white-space:pre-wrap;display:flex"><div style="font-size:1.5em"><span class="icon">💡</span></div><div style="width:100%"><p>FlashAttention 的本质：用分块和融合计算减少 HBM I/O，让 GPU 把更多时间花在计算上，而不是搬运巨大的中间矩阵。</p></div></figure></div>
+</div></article>

@@ -36,11 +36,24 @@
 		<h1 class="post-title">Pre-norm vs Post-norm</h1>
 		<nav class="language-switch" aria-label="Post language"><a class="language-option" href="/blog/2026/02/12/pre-norm-vs-post-norm">English</a><span class="language-option is-active" aria-current="true">中文</span></nav>
 	</header>
-	<section class="translation-note">
-	<p class="eyebrow">中文版本</p>
-	<p>这篇笔记比较 Pre-norm 与 Post-norm 的残差路径和梯度传播差异，解释为什么深层 Transformer 通常更偏向 Pre-norm。</p>
-	<p>完整中文翻译会继续补充。你可以先通过上方的 <strong>English</strong> 按钮回到英文原文。</p>
-</section>
+	<article class="page sans"><div class="page-body">
+<div style="display:contents" dir="auto"><p><strong>Post-norm：</strong></p></div>
+<div style="display:contents" dir="auto"><figure class="equation"><div class="equation-container">\[ x_{\ell+1}=\operatorname{Norm}(x_\ell+F_\ell(x_\ell)) \]</div></figure></div>
+<div style="display:contents" dir="auto"><p><strong>Pre-norm：</strong></p></div>
+<div style="display:contents" dir="auto"><figure class="equation"><div class="equation-container">\[ x_{\ell+1}=x_\ell+F_\ell(\operatorname{Norm}(x_\ell)) \]</div></figure></div>
+<div style="display:contents" dir="auto"><h1>为什么 Pre-norm 能稳定深层模型</h1></div>
+<div style="display:contents" dir="auto"><h2>它保留了干净的残差通路</h2></div>
+<div style="display:contents" dir="auto"><p>在 pre-norm 中，残差路径包含一个直接的 identity：</p></div>
+<div style="display:contents" dir="auto"><figure class="equation"><div class="equation-container">\[ \frac{\partial x_{\ell+1}}{\partial x_\ell}=I+\frac{\partial F_\ell(\operatorname{Norm}(x_\ell))}{\partial x_\ell} \]</div></figure></div>
+<div style="display:contents" dir="auto"><p>无论 sublayer 的梯度多复杂，identity 项都给梯度传播提供了一条更稳定的通路。</p></div>
+<div style="display:contents" dir="auto"><h2>Post-norm 会把 Norm 放在残差之后</h2></div>
+<div style="display:contents" dir="auto"><p>post-norm 的梯度会经过 norm 的 Jacobian：</p></div>
+<div style="display:contents" dir="auto"><figure class="equation"><div class="equation-container">\[ \frac{\partial x_{\ell+1}}{\partial x_\ell}=J_{\operatorname{Norm}}(\cdot)\left(I+\frac{\partial F_\ell(x_\ell)}{\partial x_\ell}\right) \]</div></figure></div>
+<div style="display:contents" dir="auto"><p>深层网络中，这些 Jacobian 的连乘可能放大、缩小或扭曲梯度，使优化更困难。</p></div>
+<div style="display:contents" dir="auto"><h2>训练早期更容易优化</h2></div>
+<div style="display:contents" dir="auto"><p>经验上，post-norm 对 learning rate、warmup、初始化更敏感。pre-norm 更稳健，因此成为很多深层 decoder-only LLM 的默认结构。</p></div>
+<div style="display:contents" dir="auto"><p><strong>经验法则：</strong>模型越深，pre-norm 越容易“直接可用”。</p></div>
+</div></article>
 
 </article>
 

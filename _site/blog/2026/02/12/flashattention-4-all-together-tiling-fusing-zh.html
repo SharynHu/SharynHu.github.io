@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
-		<title>FlashAttention(4)：合在一起：tiling 与 fusing | Sharyn Hu</title>
+		<title>FlashAttention(4)：合在一起：Tiling 与 Fusing | Sharyn Hu</title>
 		<link rel="stylesheet" type="text/css" href="/css/main.css">
 		<link rel="stylesheet" href="/css/syntax.css">
 		<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
@@ -33,14 +33,41 @@
 			<article class="post">
 	<header class="post-header">
 		<p class="meta">12 Feb 2026</p>
-		<h1 class="post-title">FlashAttention(4)：合在一起：tiling 与 fusing</h1>
+		<h1 class="post-title">FlashAttention(4)：合在一起：Tiling 与 Fusing</h1>
 		<nav class="language-switch" aria-label="Post language"><a class="language-option" href="/blog/2026/02/12/flashattention-4-all-together-tiling-fusing">English</a><span class="language-option is-active" aria-current="true">中文</span></nav>
 	</header>
-	<section class="translation-note">
-	<p class="eyebrow">中文版本</p>
-	<p>这篇笔记把 tiling、fusing、前向传播和反向重计算串起来，说明 FlashAttention 如何减少 HBM 访问并避免物化完整 attention 矩阵。</p>
-	<p>完整中文翻译会继续补充。你可以先通过上方的 <strong>English</strong> 按钮回到英文原文。</p>
-</section>
+	<article class="page sans"><div class="page-body">
+<div style="display:contents" dir="auto"><p>这一篇把前面的概念合起来：tiling、fusing、online softmax，以及反向传播中的重计算。</p></div>
+<div style="display:contents" dir="auto"><h1>前向传播</h1></div>
+<div style="display:contents" dir="auto"><p>FlashAttention 把 <span class="notion-text-equation-token">\(Q,K,V\)</span> 切成 block。每次把一个 query block 和若干 key/value block 搬到 SRAM/shared memory 中计算。</p></div>
+<div style="display:contents" dir="auto"><p>对每个 query block，算法维护：</p></div>
+<div style="display:contents" dir="auto"><ul><li>当前最大值 <span class="notion-text-equation-token">\(m_i\)</span>。</li><li>当前归一化因子 <span class="notion-text-equation-token">\(\ell_i\)</span>。</li><li>当前累积输出 <span class="notion-text-equation-token">\(O_i\)</span>。</li></ul></div>
+<div style="display:contents" dir="auto"><h2>处理一个 key/value block</h2></div>
+<div style="display:contents" dir="auto"><p>先计算局部 score：</p></div>
+<div style="display:contents" dir="auto"><figure class="equation"><div class="equation-container">\[ S_{ij}=Q_iK_j^T/\sqrt{d} \]</div></figure></div>
+<div style="display:contents" dir="auto"><p>然后用 online softmax 更新最大值和归一化因子，并把当前 block 的 contribution 融合进输出。</p></div>
+<div style="display:contents" dir="auto"><h1>Fusing：为什么更省内存</h1></div>
+<div style="display:contents" dir="auto"><p>标准实现会把 score、softmax probability 等中间结果写回 HBM。FlashAttention 把这些操作融合在一个 kernel 的 block 内部，尽量只把最终输出写回 HBM。</p></div>
+<div style="display:contents" dir="auto"><p>也就是说，它不是先完整生成 attention matrix，再对它做 softmax，再乘 <span class="notion-text-equation-token">\(V\)</span>；而是边算边归一化，边累积输出。</p></div>
+<div style="display:contents" dir="auto"><h1>反向传播：重计算</h1></div>
+<div style="display:contents" dir="auto"><p>反向传播需要 attention probabilities。如果前向没有保存完整矩阵，反向怎么办？FlashAttention 的答案是：重新计算需要的 block。</p></div>
+<div style="display:contents" dir="auto"><p>这看起来增加了 FLOPs，但通常是值得的，因为 GPU 计算相对便宜，HBM 读写相对昂贵。</p></div>
+<div style="display:contents" dir="auto"><h1>简化版伪代码</h1></div>
+<div style="display:contents" dir="auto"><pre class="code code-wrap language-python"><code class="language-python">for q_block in Q:
+    m = -inf
+    l = 0
+    o = 0
+    for k_block, v_block in zip(K_blocks, V_blocks):
+        scores = q_block @ k_block.T / sqrt(d)
+        m_new = max(m, rowmax(scores))
+        p = exp(scores - m_new)
+        l_new = exp(m - m_new) * l + rowsum(p)
+        o = exp(m - m_new) * o + p @ v_block
+        m, l = m_new, l_new
+    output = o / l</code></pre></div>
+<div style="display:contents" dir="auto"><h1>总结</h1></div>
+<div style="display:contents" dir="ltr"><figure class="block-color-gray_background callout" style="white-space:pre-wrap;display:flex"><div style="font-size:1.5em"><span class="icon">💡</span></div><div style="width:100%"><p>FlashAttention 的主要收益来自减少中间矩阵的物化和 HBM I/O，而不是改变 Attention 的数学定义。</p></div></figure></div>
+</div></article>
 
 </article>
 

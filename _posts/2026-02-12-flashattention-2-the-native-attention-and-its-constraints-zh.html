@@ -5,8 +5,25 @@ date: 2026-02-12
 lang: zh
 lang_ref: flashattention-2-the-native-attention-and-its-constraints
 ---
-<section class="translation-note">
-	<p class="eyebrow">中文版本</p>
-	<p>这篇笔记拆解标准 Attention 的计算流程、softmax 的数值稳定性问题，以及为什么朴素实现会在显存和带宽上付出很高代价。</p>
-	<p>完整中文翻译会继续补充。你可以先通过上方的 <strong>English</strong> 按钮回到英文原文。</p>
-</section>
+<article class="page sans"><div class="page-body">
+<div style="display:contents" dir="auto"><p>这一篇拆解标准 Attention 的实现方式，以及它为什么会遇到数值稳定性和内存开销问题。</p></div>
+<div style="display:contents" dir="auto"><h1>标准 Attention</h1></div>
+<div style="display:contents" dir="auto"><p>标准 Attention 可以分成三步：</p></div>
+<div style="display:contents" dir="auto"><ol><li>计算 score：<span class="notion-text-equation-token">\(S = QK^T / \sqrt{d}\)</span>。</li><li>对每一行做 softmax：<span class="notion-text-equation-token">\(P = \operatorname{softmax}(S)\)</span>。</li><li>乘以 value：<span class="notion-text-equation-token">\(O = PV\)</span>。</li></ol></div>
+<div style="display:contents" dir="auto"><p>如果序列长度是 <span class="notion-text-equation-token">\(N\)</span>，score 矩阵和概率矩阵都是 <span class="notion-text-equation-token">\(N \times N\)</span>。</p></div>
+<div style="display:contents" dir="auto"><h2>数值不稳定：softmax 溢出</h2></div>
+<div style="display:contents" dir="auto"><p>softmax 的定义是：</p></div>
+<div style="display:contents" dir="auto"><figure class="equation"><div class="equation-container">\[ \operatorname{softmax}(x_i)=\frac{e^{x_i}}{\sum_j e^{x_j}} \]</div></figure></div>
+<div style="display:contents" dir="auto"><h3>Overflow</h3></div>
+<div style="display:contents" dir="auto"><p>如果某些 <span class="notion-text-equation-token">\(x_i\)</span> 很大，<span class="notion-text-equation-token">\(e^{x_i}\)</span> 会溢出成 infinity，最终得到 NaN。</p></div>
+<div style="display:contents" dir="auto"><h3>Underflow</h3></div>
+<div style="display:contents" dir="auto"><p>如果所有值都很小，指数项可能下溢到 0，分母也可能接近 0，结果同样不稳定。</p></div>
+<div style="display:contents" dir="auto"><h2>Safe Softmax</h2></div>
+<div style="display:contents" dir="auto"><p>常用做法是利用 shift-invariance：softmax 对整体平移不敏感。</p></div>
+<div style="display:contents" dir="auto"><figure class="equation"><div class="equation-container">\[ \operatorname{softmax}(x_i)=\frac{e^{x_i-m}}{\sum_j e^{x_j-m}}, \quad m=\max_j x_j \]</div></figure></div>
+<div style="display:contents" dir="auto"><p>这样最大的指数项变成 <span class="notion-text-equation-token">\(e^0=1\)</span>，避免了 overflow。</p></div>
+<div style="display:contents" dir="auto"><h2>内存限制</h2></div>
+<div style="display:contents" dir="auto"><p>safe softmax 解决了数值问题，但没有解决内存问题。标准实现仍然倾向于保存完整 score/probability 矩阵。在长序列场景中，这个 <span class="notion-text-equation-token">\(O(N^2)\)</span> 中间状态会成为主要瓶颈。</p></div>
+<div style="display:contents" dir="auto"><h3>总结</h3></div>
+<div style="display:contents" dir="auto"><p>标准 Attention 的数学很直接，但工程上有两个关键问题：softmax 需要数值稳定处理；完整 attention 矩阵会带来高昂的显存和带宽成本。</p></div>
+</div></article>

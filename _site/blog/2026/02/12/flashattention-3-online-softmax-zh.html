@@ -36,11 +36,27 @@
 		<h1 class="post-title">FlashAttention(3)：Online Softmax</h1>
 		<nav class="language-switch" aria-label="Post language"><a class="language-option" href="/blog/2026/02/12/flashattention-3-online-softmax">English</a><span class="language-option is-active" aria-current="true">中文</span></nav>
 	</header>
-	<section class="translation-note">
-	<p class="eyebrow">中文版本</p>
-	<p>这篇笔记说明 Online Softmax 如何在分块处理时维护正确的最大值与归一化项，为 FlashAttention 的分块计算打基础。</p>
-	<p>完整中文翻译会继续补充。你可以先通过上方的 <strong>English</strong> 按钮回到英文原文。</p>
-</section>
+	<article class="page sans"><div class="page-body">
+<div style="display:contents" dir="auto"><p>FlashAttention 不能一次看到整行 attention scores，因为它按 block 处理。因此我们需要一种可以分块计算 softmax 的方法：online softmax。</p></div>
+<div style="display:contents" dir="auto"><h1>问题：softmax 看起来需要全局信息</h1></div>
+<div style="display:contents" dir="auto"><p>safe softmax 需要先知道整行最大值：</p></div>
+<div style="display:contents" dir="auto"><figure class="equation"><div class="equation-container">\[ m=\max_j x_j, \quad \ell=\sum_j e^{x_j-m} \]</div></figure></div>
+<div style="display:contents" dir="auto"><p>最终输出是：</p></div>
+<div style="display:contents" dir="auto"><figure class="equation"><div class="equation-container">\[ y_i = \frac{e^{x_i-m}}{\ell} \]</div></figure></div>
+<div style="display:contents" dir="auto"><p>如果一次只处理一小块数据，我们还不知道最终的全局最大值 <span class="notion-text-equation-token">\(m\)</span>。</p></div>
+<div style="display:contents" dir="auto"><h1>Online Softmax 的状态</h1></div>
+<div style="display:contents" dir="auto"><p>处理到当前 block 时，维护两个量：</p></div>
+<div style="display:contents" dir="auto"><ul><li><span class="notion-text-equation-token">\(m\)</span>：目前见过的最大值。</li><li><span class="notion-text-equation-token">\(\ell\)</span>：以当前最大值为基准的指数和。</li></ul></div>
+<div style="display:contents" dir="auto"><h1>合并一个新 block</h1></div>
+<div style="display:contents" dir="auto"><p>假设旧状态是 <span class="notion-text-equation-token">\((m_{old},\ell_{old})\)</span>，新 block 的最大值和指数和是 <span class="notion-text-equation-token">\((m_b,\ell_b)\)</span>。合并后的最大值是：</p></div>
+<div style="display:contents" dir="auto"><figure class="equation"><div class="equation-container">\[ m_{new}=\max(m_{old},m_b) \]</div></figure></div>
+<div style="display:contents" dir="auto"><p>旧的归一化因子必须按照新的最大值重新缩放：</p></div>
+<div style="display:contents" dir="auto"><figure class="equation"><div class="equation-container">\[ \ell_{new}=e^{m_{old}-m_{new}}\ell_{old}+e^{m_b-m_{new}}\ell_b \]</div></figure></div>
+<div style="display:contents" dir="auto"><h1>为什么这对 FlashAttention 有用</h1></div>
+<div style="display:contents" dir="auto"><p>FlashAttention 在处理每个 query block 时，会逐块扫描 key/value block。Online softmax 让它可以在不保存完整 score 矩阵的情况下，得到与标准 safe softmax 一致的结果。</p></div>
+<div style="display:contents" dir="auto"><h1>总结</h1></div>
+<div style="display:contents" dir="auto"><p>Online softmax 的关键是当最大值变化时，把旧的指数和和旧的部分输出重新缩放到新的基准上。这一步让分块 attention 成为可能。</p></div>
+</div></article>
 
 </article>
 

@@ -5,8 +5,25 @@ date: 2026-02-12
 lang: zh
 lang_ref: layernorm-vs-rmsnorm-what-s-different
 ---
-<section class="translation-note">
-	<p class="eyebrow">中文版本</p>
-	<p>这篇笔记比较 LayerNorm 与 RMSNorm：它们分别归一化什么、去掉均值项会带来什么影响，以及为什么 RMSNorm 常见于现代 LLM。</p>
-	<p>完整中文翻译会继续补充。你可以先通过上方的 <strong>English</strong> 按钮回到英文原文。</p>
-</section>
+<article class="page sans"><div class="page-body">
+<div style="display:contents" dir="auto"><p>LayerNorm 和 RMSNorm 都是 Transformer 中常见的归一化方法。它们很像，但 RMSNorm 去掉了减均值这一步。</p></div>
+<div style="display:contents" dir="auto"><h1>它们归一化什么</h1></div>
+<div style="display:contents" dir="auto"><h2>LayerNorm</h2></div>
+<div style="display:contents" dir="auto"><p>LayerNorm 会对一个 token 的 hidden dimension 求均值和方差：</p></div>
+<div style="display:contents" dir="auto"><figure class="equation"><div class="equation-container">\[ \operatorname{LN}(x)=\gamma \frac{x-\mu}{\sqrt{\sigma^2+\epsilon}}+\beta \]</div></figure></div>
+<div style="display:contents" dir="auto"><p>它同时做了 centering 和 scaling。</p></div>
+<div style="display:contents" dir="auto"><h2>RMSNorm</h2></div>
+<div style="display:contents" dir="auto"><p>RMSNorm 不减均值，只用 root mean square 做缩放：</p></div>
+<div style="display:contents" dir="auto"><figure class="equation"><div class="equation-container">\[ \operatorname{RMSNorm}(x)=\gamma \frac{x}{\sqrt{\frac{1}{d}\sum_i x_i^2+\epsilon}} \]</div></figure></div>
+<div style="display:contents" dir="auto"><h1>实践中的含义</h1></div>
+<div style="display:contents" dir="auto"><p>RMSNorm 更简单，计算更少，也少了一些 reduce 操作。在大模型中，这种差异会影响吞吐和实现复杂度。</p></div>
+<div style="display:contents" dir="auto"><h1>什么时候 RMSNorm 更有帮助</h1></div>
+<div style="display:contents" dir="auto"><h2>速度和简洁性</h2></div>
+<div style="display:contents" dir="auto"><p>RMSNorm 不计算均值，kernel 更简单，常常更快。</p></div>
+<div style="display:contents" dir="auto"><h2>现代 LLM 的默认选择</h2></div>
+<div style="display:contents" dir="auto"><p>很多 decoder-only LLM 使用 RMSNorm，因为它足够稳定，同时更轻量。</p></div>
+<div style="display:contents" dir="auto"><h2>什么时候 LayerNorm 可能更合适</h2></div>
+<div style="display:contents" dir="auto"><p>如果模型或任务对特征中心化非常敏感，LayerNorm 的减均值可能仍然有价值。</p></div>
+<div style="display:contents" dir="auto"><h3>实用建议</h3></div>
+<div style="display:contents" dir="auto"><p>从工程角度看，如果是在构建现代 LLM，RMSNorm 通常是默认选择；如果在复现旧架构或需要严格匹配原论文，则使用 LayerNorm。</p></div>
+</div></article>
