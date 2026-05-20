@@ -1,0 +1,184 @@
+---
+layout: post
+title: "RadixAttention"
+date: 2026-05-19
+lang: zh
+lang_ref: radixattention
+---
+<article class="page sans" id="radixattention">
+  <div class="page-body">
+    <p>RadixAttention 是 SGLang 引入的一种 KV cache 管理与共享技术。它会在不同请求拥有共同前缀时自动复用 KV cache；这类前缀重叠在真实 serving 负载里非常常见。</p>
+
+    <h1>它解决的问题</h1>
+    <p><mark class="highlight-yellow_background"><strong>在标准 LLM serving 系统里，每个请求通常都有自己独立的 KV cache。</strong></mark> <mark class="highlight-yellow_background"><strong>当请求结束后，这份 cache 往往会被丢弃。</strong></mark> 如果每个请求都完全不同，这样做没有问题；但 <mark class="highlight-yellow_background"><strong>真实 LLM 流量里经常存在大量 prefix overlap。</strong></mark></p>
+
+    <details>
+      <summary><strong>1. System prompts</strong></summary>
+      <p><strong>场景：</strong>当你使用 ChatGPT 这类应用，或公司内部的客服 bot 时，开发者通常会在你的消息前面静默拼接一大段 system prompt，然后再发送给 LLM。</p>
+      <p><strong>例子：</strong>想象一个电商客服 bot。</p>
+      <ul>
+        <li><strong>User A asks:</strong> <code>Where is my order?</code></li>
+        <li><strong>What the LLM actually sees:</strong> <code>[You are a helpful customer support bot for ShoeStore Inc. Never use bad language. Always be polite. If you don't know the answer, say so. Returns are allowed within 30 days... (2,000 words of instructions)]</code> + <em><code>"Where is my order?"</code></em></li>
+        <li><strong>User B asks:</strong> <code>Do you sell red boots?</code></li>
+        <li><strong>What the LLM actually sees:</strong> 同一段 2,000-word system prompt + <em><code>"Do you sell red boots?"</code></em></li>
+      </ul>
+      <p><strong>重叠在哪里：</strong>如果 10,000 个用户都在和这个 bot 对话，标准系统会把完全相同的 2,000 个词读取并计算 10,000 次。RadixAttention 会把共享 prefix 计算一次，在 cache 仍然 resident 时保留下来，并复用到多个用户请求上。</p>
+    </details>
+
+    <details>
+      <summary><strong>2. Few-shot examples and RAG pipelines</strong></summary>
+      <p><strong>场景：</strong>在 Retrieval-Augmented Generation 中，应用会先从数据库里检索文档，再把文档拼进 prompt。用户经常会围绕同一批文档连续提多个问题。</p>
+      <p><strong>例子：</strong>你把一份 50 页的医疗保险 policy PDF 上传到 AI assistant。</p>
+      <ul>
+        <li><strong>Query 1:</strong> <code>[Here is the document: (50 pages of healthcare policy text)]</code> + <em><code>"Does this cover dental?"</code></em></li>
+        <li><strong>Query 2:</strong> <code>[Here is the document: (50 pages of healthcare policy text)]</code> + <em><code>"What is the copay for a specialist?"</code></em></li>
+        <li><strong>Query 3:</strong> <code>[Here is the document: (50 pages of healthcare policy text)]</code> + <em><code>"Can I add my spouse?"</code></em></li>
+      </ul>
+      <p><strong>重叠在哪里：</strong>这份 50 页 PDF 对每个问题来说都是完全相同的 prefix。没有缓存时，LLM 每回答一个问题都要从头读完 50 页。有了 prefix caching，共享的文档 prefix 可以被复用，模型只需要 prefill 新问题对应的 suffix。</p>
+    </details>
+
+    <details>
+      <summary><strong>3. Multi-turn conversations</strong></summary>
+      <p><strong>场景：</strong>随着 chat 继续进行，模型需要把之前的轮次作为上下文。大多数 chat 系统会在每一轮都把完整 conversation history 重新喂给模型。</p>
+      <p><strong>例子：</strong>你正在用 AI 写代码。</p>
+      <ul>
+        <li><strong>Turn 1:</strong> <em>Write a Python script to scrape a website.</em> -> AI 输出一个脚本。</li>
+        <li><strong>Turn 2:</strong> <code>[Turn 1 + AI Script]</code> + <em><code>"Can you add error handling to this?"</code></em> -> AI 输出修改后的脚本。</li>
+        <li><strong>Turn 3:</strong> <code>[Turn 1 + AI Script + Turn 2 + AI Updated Script]</code> + <em><code>"Now make it run 10 times faster."</code></em></li>
+      </ul>
+      <p><strong>重叠在哪里：</strong>到第 10 轮时，history 可能已经有 15,000 个 token。第 11 轮里，标准系统会重新计算前面所有 15,000 个 token。RadixAttention 系统可以识别之前的 history 已经在 radix tree 中表示过，只需要 prefill 最新的 suffix。</p>
+    </details>
+
+    <details>
+      <summary><strong>4. Agents and tool-calling loops</strong></summary>
+      <p><strong>场景：</strong>Autonomous agents 会在 loop 中运行。它们拿到一个目标，思考下一步，调用工具，读取工具结果，然后继续重复。每次迭代都会把新的文本追加到原始 instructions 后面。</p>
+      <p><strong>例子：</strong>你给 agent 一个目标：<em><code>"Find the weather in Tokyo and email it to Bob."</code></em></p>
+      <ul>
+        <li><strong>Loop 1:</strong> <code>[Agent Instructions] + [Goal: Find weather and email Bob]</code><br><em>AI action:</em> <code>"Search: Weather in Tokyo"</code> -> <em>result:</em> <code>"75 degrees and sunny"</code>.</li>
+        <li><strong>Loop 2:</strong> <code>[Agent Instructions] + [Goal] + [Action 1] + [Result 1]</code><br><em>AI action:</em> <code>"Find Bob's email address"</code> -> <em>result:</em> <code>"bob@email.com"</code>.</li>
+        <li><strong>Loop 3:</strong> <code>[Agent Instructions] + [Goal] + [Action 1] + [Result 1] + [Action 2] + [Result 2]</code><br><em>AI action:</em> <code>"Send Email to bob@email.com: It is 75 degrees."</code></li>
+      </ul>
+      <p><strong>重叠在哪里：</strong>一个 agent 可能需要 15 个 loop 才能完成复杂任务。每个 loop 都包含 master instructions 和之前的 action log。Prefix caching 可以消除对不变 prefix 的重复处理。</p>
+      <p>如果没有 prefix sharing，一个 2,000-token system prompt 服务 1,000 个用户，每轮就会产生 2 million 次冗余的 prefill-token 计算。</p>
+    </details>
+
+    <h1>核心想法：把 KV cache 存进 radix tree</h1>
+    <p>Radix tree，也叫 compressed trie，是一种树结构：<mark class="highlight-pink_background"><strong>从 root 出发的每条路径表示一个序列，而具有共同 prefix 的序列可以共享节点。</strong></mark> RadixAttention 使用按 <mark class="highlight-pink_background"><strong>token IDs</strong></mark> 建索引的 radix tree 来管理 KV cache。</p>
+
+    <figure>
+      <img src="/assets/radixattention/radix-tree-kv-cache.png" alt="Color illustration of a radix tree showing shared prompt prefixes and cached KV branches">
+      <figcaption>彩色 radix tree：共享的 system prompt prefix 只存一次，而每个请求特有的 suffix 会在其下方分叉。</figcaption>
+    </figure>
+
+    <p>每个节点保存一段 token span 对应的 KV cache。当新请求到达时，系统沿着树逐 token 匹配请求输入。任何能匹配到已有路径的 prefix 都可以直接复用，不需要重新计算。</p>
+
+    <figure>
+      <img src="/assets/radixattention/radix-node-structure.svg" alt="RadixAttention node structure with key, value, children, and metadata fields">
+      <figcaption>一个 RadixAttention 节点保存 compressed token span、KV block pointers、按下一个 token 分叉的 child branches，以及用于 eviction 的 metadata。</figcaption>
+    </figure>
+
+    <h1>一个请求是如何被服务的</h1>
+    <p>当一个带有 tokens <code>[t_1, t_2, ..., t_n]</code> 的请求到达时：</p>
+    <ol>
+      <li><strong>Prefix match:</strong> 从 root 开始遍历 radix tree，逐 token 匹配。如果最长匹配 prefix 是 <code>[t_1, ..., t_k]</code>，那么这 <code>k</code> 个 token 的 KV cache 已经存在，可以直接复用。</li>
+      <li><strong>Prefill the rest:</strong> 对 <code>[t_{k+1}, ..., t_n]</code> 运行 model forward。在这次 forward pass 中，attention layers 会 attend 到所有之前的 token，包括已经缓存的 token。</li>
+      <li><strong>Add new nodes:</strong> 随着新 token 被处理和生成，把新路径扩展进 radix tree，让未来请求也能受益。</li>
+      <li><strong>Reference counting:</strong> 每个节点记录当前有多少 active requests 正在使用它。当计数降到 0 时，这个节点就可能进入可 eviction 状态。</li>
+    </ol>
+
+    <h1>RadixAttention eviction policy</h1>
+    <p><strong>Eligibility: 什么可以被 evict？</strong></p>
+    <ul>
+      <li>节点必须满足 <code>ref_count == 0</code>，表示没有 active request 正在使用这段 node span。</li>
+      <li>节点必须是 <strong>leaf</strong>。优先 evict leaf 可以让公共 ancestors 尽可能继续复用，直到它们自己也变成 leaf。</li>
+      <li>节点不能被某种实现相关的保护机制 pin 住。</li>
+    </ul>
+    <p>leaf 约束是结构性的：如果在 descendants 还存在时 evict 一个 internal node，会破坏这些 descendants 的 prefix dependency。</p>
+
+    <p><strong>Ordering: 哪个 eligible node 先被 evict？</strong></p>
+    <p>在 eligible leaves 里，eviction 按 last-access time 做 LRU 排序。每个节点都有一个 <code>last_access</code> timestamp；当节点在 prefix lookup 中被匹配到，或进入可 evict 状态时，这个 timestamp 会被更新。</p>
+    <p><mark class="highlight-pink_background">在可 evict leaves 中，<code>last_access</code> 最老的节点会最先被 evict。</mark></p>
+
+    <p><strong>Trigger: eviction 什么时候运行？</strong></p>
+    <p><mark class="highlight-pink_background">Eviction 是由 allocation pressure 触发的。</mark> 当新的 block allocation 因为 memory pool 耗尽而失败时，cache manager 会遍历可 evict leaves，并持续 evict，直到释放出足够的 blocks。</p>
+
+    <p><strong>Cascading:</strong> 一个 leaf 被 evict 后，它的 parent 可能变成新的 leaf。如果这个 parent 也满足 <code>ref_count == 0</code>，它就可能在下一轮 eviction 中变成 eligible。一次 allocation attempt 可以连续 evict 一串 stale prefix nodes，只要这些节点都没有正在被使用。</p>
+
+    <p><strong>Coalescing:</strong> 如果 eviction 之后留下一个非 leaf 节点，并且它只剩下一个 child，实现上可以把二者重新合并成一个 compressed span，让树保持紧凑。这能节省内存和 lookup 成本，但会增加实现复杂度。</p>
+
+    <p><strong>简洁算法：</strong></p>
+<pre class="code code-wrap language-python"><code class="language-python">def evict_to_free(blocks_needed):
+    freed = 0
+    # Walk the LRU list from oldest to newest
+    for node in lru_list.iterate_oldest_first():
+        if node.ref_count != 0:
+            continue            # pinned by active request
+        if node.has_children():
+            continue            # not a leaf
+
+        # Evict this node
+        free_blocks(node.kv_indices)
+        parent = node.parent
+        parent.children.pop(node.key[0])
+        remove_from_tree(node)
+        freed += len(node.kv_indices)
+
+        if freed >= blocks_needed:
+            return True
+
+    return False  # couldn't free enough; admission must wait</code></pre>
+
+    <h1>为什么特别叫 “radix”？</h1>
+    <p>Radix tree 会把单 child 链压缩成一个节点。像 <code>"The" -> " quick" -> " brown" -> " fox"</code> 这样的路径，会变成一个保存整段 phrase 的节点，而不是四个独立节点。</p>
+    <p>这样可以让树更紧凑，匹配也更快，因为 runtime 可以一次跳过很长的唯一 suffix，而不是一个节点一个节点地走。</p>
+
+    <h1>具体收益</h1>
+    <p>SGLang 论文报告，在它的 benchmark suite 上，吞吐最高可提升 <strong>6.4x</strong>，延迟最高可降低 <strong>3.7x</strong>。RadixAttention 是其中一个重要贡献，尤其适用于 agents、multi-turn chat、few-shot tasks 和 RAG pipelines 这类存在 prefix sharing 的负载。</p>
+    <p>实际 speedup 取决于 workload 有多少 prefix overlap：</p>
+    <ul>
+      <li><strong>No sharing:</strong> 接近标准 serving，只多一点 metadata overhead。</li>
+      <li><strong>Moderate sharing:</strong> system prompt 加上多样化 queries，可以显著减少冗余 prefill。</li>
+      <li><strong>Heavy sharing:</strong> agent loops、tool use、multi-turn conversations 和重复 RAG contexts 通常收益最大。</li>
+    </ul>
+    <p>对本来就有共享结构的 workloads 来说，RadixAttention 基本上是一种接近免费的性能收益，而很多真实 workloads 确实有这种结构。</p>
+
+    <h1>它和其他 caching 方法有什么不同</h1>
+    <ul>
+      <li><strong>Session-based caching:</strong> 由 application 管理哪些请求共享 cache，通常依赖显式 session IDs。这能工作，但需要 application-level cooperation。</li>
+      <li><strong>Hash-based prefix caching:</strong> 系统对 token blocks 做 hash，并复用 hash 匹配的 blocks。这也能工作，但 block alignment 和 eviction 通常不如 tree-structured prefix sharing 自然。</li>
+      <li><strong>RadixAttention:</strong> 自动进行 token-level matching，并用自然的树结构支持 insertion、reference counting 和 LRU eviction。</li>
+    </ul>
+    <p>Radix tree 方法在概念上接近 filesystems 或 git-like content stores 的 deduplication：公共 prefix 只表示一次，并以结构化方式被复用。</p>
+
+    <p><strong>实际 cache residency 取决于部署方式：</strong></p>
+    <ul>
+      <li><strong>GPU cache in RadixAttention:</strong> 在负载较高时通常是短期驻留，因为它会和 active request KV memory 竞争显存。</li>
+      <li><strong>Host or hierarchical cache:</strong> SGLang HiCache 把同样思想扩展到 host memory 和 distributed storage，可以延长 residency，但 entries 仍然受 eviction、配置和兼容性约束影响。</li>
+      <li><strong>Long-term user sessions:</strong> 昨天的 conversation 不应该默认还留在 GPU RadixAttention cache 里。持久化 application state 仍然需要 application storage、summarization、retrieval，或实验性的 KV serialization。</li>
+    </ul>
+
+    <p>所以，当复用发生得足够快、prefix KV cache 仍然 resident 时，RadixAttention 最有帮助：</p>
+    <ul>
+      <li>在 active conversation 内，下一轮几秒后到达；</li>
+      <li>多个并发请求共享同一个 system prompt；</li>
+      <li>agent loops 内，tool calls 快速连续发生；</li>
+      <li>重复的 RAG 或 few-shot workloads 具有共同 prompt prefixes。</li>
+    </ul>
+
+    <p><strong>那真正长期的复用怎么办？</strong></p>
+    <ol>
+      <li><strong>Application-level caching:</strong> 把 raw conversation history 存在 Redis 或 Postgres 这类数据库里。用户回来时，用 history 加新 message 构造 prompt。KV cache 仍然可能需要通过 prefill 重建。</li>
+      <li><strong>KV cache serialization:</strong> 研究系统和工程系统可以把 KV cache 序列化到 disk 或 object storage，并按 conversation 或 prefix 做 key。这很复杂，因为 KV cache 绑定于 model weights、quantization、RoPE settings、position encoding 和 runtime layout。</li>
+      <li><strong>Summarization:</strong> 长 conversation 可以在 prefill 前总结成更紧凑的 context。这能降低成本，但它是质量 tradeoff，不是真正的 cache reuse。</li>
+      <li><strong>Retrieval-augmented memory:</strong> 不传入完整 history，而是从存储中 retrieve 相关 chunks。这样 prefix 更短，也更可预测。</li>
+    </ol>
+
+    <h1>对 serving 的影响</h1>
+    <p>RadixAttention 改变了高效 serving 的形态：</p>
+    <ul>
+      <li><strong>Large system prompts become cheaper:</strong> 只要 cache 仍然 resident，大 system prompt 可以 prefill 一次，然后在许多用户之间共享。</li>
+      <li><strong>Multi-turn conversations become cheaper:</strong> 每一轮可以只 prefill 新 suffix，而不是重新 prefill 整个 history。</li>
+      <li><strong>Workload shaping matters:</strong> 如果 serving 系统能把共享 prefixes 的请求排序或 batch 到一起，就能提升 cache hit rate。SGLang 因此包含 cache-aware scheduling。</li>
+    </ul>
+  </div>
+</article>
