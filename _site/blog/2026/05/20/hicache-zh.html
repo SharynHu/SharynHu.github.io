@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>HiCache | Sharyn Hu</title>
+		<link rel="stylesheet" type="text/css" href="/css/main.css">
+		<link rel="stylesheet" href="/css/syntax.css">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" integrity="sha512-tN7Ec6zAFaVSG3TpNAKtk4DOHNpSwKHxxrsiw4GHKESGPs5njn/0sMCUMl2svV4wo4BK/rCP7juYz+zx+l6oeQ==" crossorigin="anonymous" referrerpolicy="no-referrer">
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js" integrity="sha512-7Z9J3l1+EYfeaPKcGXu3MS/7T+w19WtKQY/n+xzmw4hZhJ9tyYmcUS+4QqAlzhicE5LAfMQSF3iFTK9bQdTxXg==" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+		<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+		<script type="text/x-mathjax-config">
+			MathJax.Hub.Config({
+				tex2jax: {
+					skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+					inlineMath: [['$','$']]
+				}
+			});
+		</script>
+	</head>
+	<body>
+		
+			<header class="site-header">
+				<a class="site-title" href="/">Sharyn Hu</a>
+				<p class="site-tagline">Notes on computer science, systems, and machine learning.</p>
+				<nav class="site-nav">
+					<a href="/">Home</a>
+					<a href="/blog">Blog</a>
+				</nav>
+			</header>
+		
+
+		<main class="container">
+			<article class="post">
+	<header class="post-header">
+		<p class="meta">20 May 2026</p>
+		<h1 class="post-title">HiCache</h1>
+		<nav class="language-switch" aria-label="Post language"><a class="language-option" href="/blog/2026/05/20/hicache">English</a><span class="language-option is-active" aria-current="true">中文</span></nav>
+	</header>
+	<article class="page sans" id="hicache">
+  <div class="page-body">
+    <p>HiCache (Hierarchical Cache) 是 SGLang 在 RadixAttention 之上的扩展：它在 GPU KV cache 下面增加了<strong>第二层存储</strong>，也就是 host (CPU) memory。它解决的是 RadixAttention 的根本限制：prefix tree 只能容纳 GPU VRAM 放得下的内容，而真实 workloads 里可缓存的 prefix 数据量通常远远大于 GPU 显存容量。</p>
+
+    <h1>HiCache 解决的问题</h1>
+    <p><mark class="highlight-pink_background"><strong>RadixAttention 完全生活在 GPU memory 里。</strong></mark> 一旦 KV cache 被填满，LRU eviction 就会开始运行，旧 prefix 会被永久丢弃。下一次有请求需要同一个 prefix 时，系统必须从头重新 prefill。</p>
+
+    <p>在真实 workloads 里，这会造成浪费。比如：</p>
+    <ul>
+      <li>一个 RAG 系统有 10,000 份经常被查询的文档，但 GPU cache 里一次只能放下大约 100 份。</li>
+      <li>一个 agent 平台有成千上万用户，每个用户都有自己的 conversation history。</li>
+      <li>一个 code assistant 服务一个大型 codebase，不同文件会不断被换入和换出。</li>
+    </ul>
+
+    <p><mark class="highlight-pink_background"><strong>有用 prefix 的总 working set 经常比 GPU VRAM 大 10-100 倍。</strong></mark> 但访问模式又是偏斜的：有些 prefix 会热一段时间，然后变冷，之后又重新变热。把它们彻底 evict 掉，意味着每次它们回来时都要重新支付完整 prefill 成本。</p>
+
+    <h2>GPU memory hierarchy: 它是 cache，不是 tiered storage</h2>
+    <p>GPU memory hierarchy 是这样的：</p>
+    <figure class="image">
+      <svg role="img" aria-labelledby="gpu-hardware-cache-title gpu-hardware-cache-desc" viewBox="0 0 920 620" width="100%" xmlns="http://www.w3.org/2000/svg">
+        <title id="gpu-hardware-cache-title">GPU hardware cache hierarchy</title>
+        <desc id="gpu-hardware-cache-desc">A vertical hierarchy showing registers, L1 cache and shared memory, L2 cache, and HBM. It emphasizes that this is a hardware-managed cache path.</desc>
+        <defs>
+          <marker id="hicache-arrow-blue" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#4f8aa3"/>
+          </marker>
+          <linearGradient id="hardware-tier-fill" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stop-color="#f8fbfd"/>
+            <stop offset="100%" stop-color="#eef4f8"/>
+          </linearGradient>
+        </defs>
+        <rect x="20" y="20" width="880" height="580" rx="16" fill="#fbfbfb" stroke="#d0d7de" stroke-width="2"/>
+        <text x="460" y="70" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="700" fill="#24292f">GPU hardware cache hierarchy</text>
+        <text x="460" y="106" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#57606a">硬件管理、自动运行，优化单次 computation 内部的数据访问</text>
+        <g font-family="Helvetica, Arial, sans-serif">
+          <rect x="230" y="145" width="460" height="72" rx="12" fill="url(#hardware-tier-fill)" stroke="#4f8aa3" stroke-width="2"/>
+          <text x="460" y="174" text-anchor="middle" font-size="23" font-weight="700" fill="#24292f">Registers</text>
+          <text x="460" y="199" text-anchor="middle" font-size="17" fill="#57606a">per-thread，很小，最快</text>
+          <line x1="460" y1="232" x2="460" y2="278" stroke="#4f8aa3" stroke-width="3" marker-end="url(#hicache-arrow-blue)"/>
+
+          <rect x="230" y="292" width="460" height="72" rx="12" fill="url(#hardware-tier-fill)" stroke="#4f8aa3" stroke-width="2"/>
+          <text x="460" y="321" text-anchor="middle" font-size="23" font-weight="700" fill="#24292f">L1 cache / Shared memory</text>
+          <text x="460" y="346" text-anchor="middle" font-size="17" fill="#57606a">per-SM，大约 128-256KB</text>
+          <line x1="460" y1="379" x2="460" y2="425" stroke="#4f8aa3" stroke-width="3" marker-end="url(#hicache-arrow-blue)"/>
+
+          <rect x="230" y="439" width="460" height="72" rx="12" fill="url(#hardware-tier-fill)" stroke="#4f8aa3" stroke-width="2"/>
+          <text x="460" y="468" text-anchor="middle" font-size="23" font-weight="700" fill="#24292f">L2 cache</text>
+          <text x="460" y="493" text-anchor="middle" font-size="17" fill="#57606a">GPU-wide，H100 上约 40-60MB</text>
+          <line x1="460" y1="526" x2="460" y2="558" stroke="#4f8aa3" stroke-width="3" marker-end="url(#hicache-arrow-blue)"/>
+
+          <rect x="230" y="566" width="460" height="34" rx="10" fill="#fff5e6" stroke="#e8a15c" stroke-width="2"/>
+          <text x="460" y="589" text-anchor="middle" font-size="21" font-weight="700" fill="#7a3814">HBM: KV cache 真正存放的位置</text>
+        </g>
+      </svg>
+    </figure>
+
+    <p>但这是一个 <strong>hardware cache hierarchy</strong>，不是 tiered storage hierarchy。关键区别是：</p>
+    <ul>
+      <li><strong>HBM</strong> 才是真正的存储。你的 KV cache <strong>生活在 HBM 里</strong>。</li>
+      <li><strong>L1 和 L2</strong> 是自动 cache，会临时保存最近访问过的 HBM 数据副本。它们由硬件管理，不由软件管理。</li>
+    </ul>
+
+    <h2>HiCache 实际放在什么位置</h2>
+    <p>从存储视角看，HiCache 在 HBM 下面增加了一层：更靠近用户、更远离计算、容量更大。</p>
+    <figure class="image">
+      <svg role="img" aria-labelledby="hicache-tier-title hicache-tier-desc" viewBox="0 0 980 680" width="100%" xmlns="http://www.w3.org/2000/svg">
+        <title id="hicache-tier-title">Where HiCache fits in the memory hierarchy</title>
+        <desc id="hicache-tier-desc">A vertical diagram showing GPU L1/L2 cache, GPU HBM, host DDR RAM, and recompute from scratch. HiCache spills KV blocks from HBM to host memory when HBM is full.</desc>
+        <defs>
+          <marker id="hicache-arrow-orange" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#d97706"/>
+          </marker>
+          <marker id="hicache-arrow-gray" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a8a8a"/>
+          </marker>
+        </defs>
+        <rect x="20" y="20" width="940" height="640" rx="16" fill="#fbfbfb" stroke="#d0d7de" stroke-width="2"/>
+        <text x="490" y="70" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="700" fill="#24292f">HiCache 增加一层 software-managed tier</text>
+        <text x="490" y="106" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#57606a">L1/L2 是 hardware cache；HiCache 在 HBM 和 host RAM 之间搬 KV blocks</text>
+        <g font-family="Helvetica, Arial, sans-serif">
+          <rect x="250" y="145" width="480" height="74" rx="12" fill="#eef4f8" stroke="#4f8aa3" stroke-width="2"/>
+          <text x="490" y="175" text-anchor="middle" font-size="23" font-weight="700" fill="#24292f">GPU L1 / L2 cache</text>
+          <text x="490" y="201" text-anchor="middle" font-size="17" fill="#57606a">hardware-managed, automatic</text>
+          <line x1="490" y1="235" x2="490" y2="280" stroke="#8a8a8a" stroke-width="3" marker-end="url(#hicache-arrow-gray)"/>
+
+          <rect x="250" y="294" width="480" height="86" rx="12" fill="#fff5e6" stroke="#e8a15c" stroke-width="2"/>
+          <text x="490" y="327" text-anchor="middle" font-size="24" font-weight="700" fill="#7a3814">GPU HBM</text>
+          <text x="490" y="354" text-anchor="middle" font-size="17" fill="#7a3814">KV cache lives here: RadixAttention tree</text>
+          <path d="M490 397 C490 418 490 438 490 462" stroke="#d97706" stroke-width="4" fill="none" marker-end="url(#hicache-arrow-orange)"/>
+          <text x="670" y="430" font-size="18" fill="#7a3814">HBM 满时 spill</text>
+
+          <rect x="250" y="478" width="480" height="86" rx="12" fill="#f2f7ff" stroke="#4f8aa3" stroke-width="2"/>
+          <text x="490" y="511" text-anchor="middle" font-size="24" font-weight="700" fill="#245f7a">Host DDR RAM</text>
+          <text x="490" y="538" text-anchor="middle" font-size="17" fill="#57606a">software-managed explicit copies，数百 GB</text>
+          <line x1="490" y1="581" x2="490" y2="610" stroke="#8a8a8a" stroke-width="3" stroke-dasharray="8 8" marker-end="url(#hicache-arrow-gray)"/>
+
+          <rect x="250" y="624" width="480" height="36" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="2"/>
+          <text x="490" y="648" text-anchor="middle" font-size="20" font-weight="700" fill="#57606a">最坏情况：从头 recompute</text>
+        </g>
+      </svg>
+    </figure>
+
+    <p>注意，HiCache 运行在 hardware cache hierarchy 之下，而不是在它里面。L1/L2 caches 不关心 HiCache 在做什么；它们只会像平常一样看到 HBM reads 和 writes。<mark class="highlight-pink_background"><strong>HiCache 的 tiering 位于完全不同的层级：它是 software-managed、显式的，操作对象是 KV cache blocks；而 L1/L2 自动操作的是 cache lines。</strong></mark></p>
+
+    <h2>为什么这个区别重要</h2>
+    <p>这两套 hierarchy 的特性非常不同：</p>
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>Hardware cache (L1/L2)</th>
+          <th>Software tier (HiCache)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Managed by</td>
+          <td>GPU hardware</td>
+          <td>Serving framework code</td>
+        </tr>
+        <tr>
+          <td>Granularity</td>
+          <td>128-byte cache lines</td>
+          <td>KV blocks (thousands of bytes)</td>
+        </tr>
+        <tr>
+          <td>Transparency</td>
+          <td>对 software 不可见</td>
+          <td>显式 API calls</td>
+        </tr>
+        <tr>
+          <td>Eviction policy</td>
+          <td>Hardware-defined approximate LRU</td>
+          <td>Software-defined LRU, LFU, or custom policy</td>
+        </tr>
+        <tr>
+          <td>Speed</td>
+          <td><mark class="highlight-pink_background"><strong>Sub-microsecond</strong></mark></td>
+          <td><mark class="highlight-pink_background"><strong>Milliseconds，通常是 PCIe transfer</strong></mark></td>
+        </tr>
+        <tr>
+          <td>Capacity</td>
+          <td>数十 MB</td>
+          <td>数百 GB</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>HiCache 和 L1/L2 hardware cache 会共存，但二者不会直接交互。当 attention 读取 HBM 中的某个 KV block 时，它会自动经过 L2 和 L1 到达 Tensor Cores；这件事无论有没有 HiCache 都会发生。<mark class="highlight-pink_background"><strong>HiCache 只在 eviction 时介入：当 HBM 满了，cache manager 需要决定被 evict 的 blocks 应该怎么办。</strong></mark></p>
+
+    <aside class="callout">
+      <p><strong>👉 Mental model</strong></p>
+      <p>Hardware caches 处理的是单次 computation <em>内部</em>的 spatial locality 和 temporal locality。像 HiCache 这样的 software tiers 处理的是不同 computations <em>之间</em>的 semantic reuse：同一个 prefix、不同请求、不同时间点。它们解决的是两个不同问题。</p>
+    </aside>
+
+    <h1>核心想法：tiered storage</h1>
+    <p>HiCache 在 GPU cache 下面增加了一层 <strong>host memory tier</strong>。memory hierarchy 变成：</p>
+    <figure class="image">
+      <svg role="img" aria-labelledby="tiered-storage-title tiered-storage-desc" viewBox="0 0 920 520" width="100%" xmlns="http://www.w3.org/2000/svg">
+        <title id="tiered-storage-title">HiCache tiered storage policy</title>
+        <desc id="tiered-storage-desc">A three-level diagram showing GPU KV cache, host memory cache, and gone/re-prefill. Evictions move blocks downward instead of immediately discarding them.</desc>
+        <defs>
+          <marker id="tiered-arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#d97706"/>
+          </marker>
+        </defs>
+        <rect x="20" y="20" width="880" height="480" rx="16" fill="#fbfbfb" stroke="#d0d7de" stroke-width="2"/>
+        <text x="460" y="70" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="700" fill="#24292f">Tiered KV cache storage</text>
+        <text x="460" y="106" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#57606a">Eviction 变成向更慢 tier 移动，而不是立刻丢失</text>
+        <g font-family="Helvetica, Arial, sans-serif">
+          <rect x="225" y="145" width="470" height="78" rx="12" fill="#fff5e6" stroke="#e8a15c" stroke-width="2"/>
+          <text x="460" y="177" text-anchor="middle" font-size="24" font-weight="700" fill="#7a3814">GPU KV cache</text>
+          <text x="460" y="203" text-anchor="middle" font-size="17" fill="#7a3814">fast, about 40-80GB</text>
+
+          <path d="M460 240 L460 292" stroke="#d97706" stroke-width="4" marker-end="url(#tiered-arrow)"/>
+          <text x="500" y="270" font-size="18" fill="#7a3814">满了就 evict</text>
+
+          <rect x="225" y="307" width="470" height="78" rx="12" fill="#f2f7ff" stroke="#4f8aa3" stroke-width="2"/>
+          <text x="460" y="339" text-anchor="middle" font-size="24" font-weight="700" fill="#245f7a">Host memory cache</text>
+          <text x="460" y="365" text-anchor="middle" font-size="17" fill="#57606a">slower, about 500GB-1TB</text>
+
+          <path d="M460 402 L460 442" stroke="#d97706" stroke-width="4" stroke-dasharray="10 8" marker-end="url(#tiered-arrow)"/>
+          <text x="500" y="425" font-size="18" fill="#7a3814">满了就 evict</text>
+
+          <rect x="225" y="456" width="470" height="44" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="2"/>
+          <text x="460" y="484" text-anchor="middle" font-size="21" font-weight="700" fill="#57606a">Gone: 必须重新 prefill</text>
+        </g>
+      </svg>
+    </figure>
+
+    <p>当某个 prefix 从 GPU cache 被 evict 时，它不会被直接丢弃，而是会被<strong>复制到 CPU RAM</strong>。如果未来有请求再次需要这个 prefix，它可以通过 PCIe 从 host memory 加载回 GPU。这个过程比 GPU cache hit 慢，但比从头 re-prefill 快得多。</p>
+
+    <h1>为什么 host memory 有吸引力</h1>
+    <p>和 VRAM 相比，host memory 更便宜，容量也更充足：</p>
+    <ul>
+      <li>H100 GPU: 80GB VRAM，昂贵，而且带宽仍然紧张。</li>
+      <li>Server CPU: 512GB-2TB DDR5 RAM，便宜，容量充足。</li>
+    </ul>
+
+    <p>CPU 和 GPU 之间的 PCIe bandwidth 大约是 PCIe 5.0 上的 64 GB/s，Grace Hopper 的 NVLink-C2C 上约 900 GB/s；这比 H100 的 HBM bandwidth，大约 3.3 TB/s，慢很多。但它仍然比重新计算一次 prefill 快得多。</p>
+
+    <p>粗略比较一个 2000-token prefix hit：</p>
+    <ul>
+      <li>GPU cache hit: 大约 0ms，因为 KV blocks 已经在那里。</li>
+      <li>Host cache hit: 大约 10-50ms，主要成本是 PCIe transfer。</li>
+      <li>Cache miss: 大约 500ms 或更多，因为 70B model 必须重新做完整 prefill。</li>
+    </ul>
+
+    <p><mark class="highlight-pink_background"><strong>所以即使是“慢”的 host cache hit，也经常比重新 prefill 快 10-50 倍。</strong></mark></p>
+
+    <h1>它如何工作</h1>
+    <p>HiCache 把 radix tree 扩展到两个 tiers 上：</p>
+<pre class="code code-wrap language-python"><code class="language-python"># Simplified lookup logic
+def lookup(tokens):
+    gpu_match = gpu_radix_tree.longest_prefix(tokens)
+    if gpu_match.length == len(tokens):
+        return gpu_match  # full GPU hit, cheapest
+
+    # Check host cache for the part GPU did not cover
+    host_match = host_radix_tree.prefix_after(gpu_match, tokens)
+    if host_match:
+        # Load host blocks back into GPU cache
+        load_from_host_to_gpu(host_match)
+        return gpu_match + host_match
+
+    # Fall through to prefilling the uncached suffix
+    return prefill_missing(tokens, after=gpu_match.length)</code></pre>
+
+    <p>radix tree structure 会在不同 tier 中复制。每个节点都知道自己的 KV data 在 GPU、CPU，还是两边都有。Eviction 不会删除 tree node；它只是把 data 移到下一层 tier。</p>
+
+    <h1>Runtime attach/detach</h1>
+    <p>HiCache 里的 “runtime attach/detach” 指的是：在一个正在运行的 SGLang serving instance 中，<strong>动态增加或移除 host memory tiers</strong>，并且<strong>不需要重启 server</strong>。当 memory pressure 很高时，可以临时 attach 更多 host RAM 作为 cache tier；当不再需要时，也可以 detach，释放这部分 memory。</p>
+
+    <p>这在 production serving system 里很重要，因为重启意味着丢弃所有 in-flight requests，并重新加载模型；对大模型来说，这可能需要数分钟。能在 server 持续服务的同时重新配置 cache hierarchy，是一个很实际的运维收益。</p>
+
+    <p><strong>典型 use cases:</strong></p>
+    <ul>
+      <li><strong>Scaling up under load:</strong> 流量高峰时 attach 额外 host memory，用来保存更多 prefixes，减少 re-prefill pressure。流量下降后再 detach，把 memory 还给同一台机器上的其他 workloads。</li>
+      <li><strong>Multi-tenant servers:</strong> 不同 tenants 或 models 可以随着 workload demand 的变化，动态分配或释放 host memory。</li>
+      <li><strong>Testing and tuning:</strong> operators 可以在不重启 server 的情况下尝试不同 cache sizes，找到某个 workload 的合适配置。</li>
+    </ul>
+
+    <p><strong>Mechanically 它是怎么工作的:</strong> 当 attach 一个新的 tier 时，HiCache 会把这个 memory region 注册到 cache manager，并开始把它纳入 eviction 和 spill decisions。detach 时，manager 会停止向这个 tier 写入新数据，evict 剩余 blocks：如果 GPU 有空间就搬回 GPU，否则就丢弃；最后把 memory 释放回 OS。整个过程中 radix tree structure 保持不变，变化的只是 backing storage。</p>
+
+    <h1>关键设计决策</h1>
+    <ul>
+      <li><strong>Asynchronous transfers:</strong> GPU 和 CPU 之间的 copy 使用 CUDA streams，可以和 compute overlap。当 GPU 正在为 uncached tokens 做 prefill 时，host-to-device transfers 可以并行发生，从而隐藏相当一部分 PCIe latency。</li>
+      <li><strong>Block-level granularity:</strong> 移动的是单个 KV blocks，通常每个 block 对应 16 或 64 个 tokens，而不是整段 sequence。这支持 partial matches。比如 2000-token prefix 中前 1500 tokens 在 host cache，后 400 tokens 在 GPU cache，runtime 就可以选择性拉取缺失 blocks。</li>
+      <li><strong>Write-through or write-back policies:</strong> HiCache 通常使用 write-back。新的 KV data 先留在 GPU，直到被 evict 时再 copy 到 host。Write-through，也就是总是立即 mirror 到 host，更简单，但会浪费 PCIe bandwidth。</li>
+      <li><strong>Admission control:</strong> 不是每个被 evict 的 prefix 都值得保存在 host cache。HiCache 会跟踪 reuse likelihood，比如 access frequency，并跳过那些真正 one-off 的 prefixes。</li>
+    </ul>
+
+    <h1>什么时候 HiCache 有帮助，什么时候没有</h1>
+    <p><strong>Big wins:</strong></p>
+    <ul>
+      <li>有 large document corpus 的 RAG：大多数 queries 命中小子集，但这个子集会轮换。</li>
+      <li>Multi-tenant serving：每个用户的 conversation history 加起来超过 GPU capacity。</li>
+      <li>Agent systems：有大量 tool-calling sessions，每个 session 都有很长的 system prompt。</li>
+      <li>任何 hot prefixes 的 working set 大于 VRAM、但小于 DDR 的场景。</li>
+    </ul>
+
+    <p><strong>Minimal benefit:</strong></p>
+    <ul>
+      <li>每次 prompt 都完全独特，因为本来就没有 prefix reuse。</li>
+      <li>总 prompt database 很小，已经能放进 GPU cache。</li>
+      <li>由 decoding 主导的 workloads。和 RadixAttention 一样，HiCache 主要帮助 prefill。</li>
+    </ul>
+
+    <h1>和更大趋势的关系</h1>
+    <p>HiCache 是 LLM serving 走向 <strong>hierarchical KV storage</strong> 的一部分。更进一步的方向也在被积极研究：</p>
+    <ul>
+      <li><strong>Disk-tier caching:</strong> 把 SSD 作为 host memory 下面的第三层 tier。它适合非常巨大的 prefix databases，代价是 latency 更高。</li>
+      <li><strong>Distributed prefix caching:</strong> 在多个 serving nodes 之间共享 prefix caches，这样用户的 conversation 不一定每次都要落到同一个 GPU 上。</li>
+      <li><strong>Semantic caching:</strong> 超越 exact prefix match，做 approximate matching，比如同一篇文档的 paraphrase 或相似问题。</li>
+    </ul>
+
+    <p>HiCache 专门瞄准 GPU-to-host tier，是因为这里有最大的 free-lunch opportunity：host memory 已经存在于每个 serving node 上，PCIe 和 CUDA streams 这类 transfer infrastructure 已经成熟，而且 latency 足够小，使得 cache 相比 recompute 明显更划算。</p>
+  </div>
+</article>
+
+</article>
+
+		</main>
+
+
+		<style>
+			html body {
+				max-width: none !important;
+				margin: 0 !important;
+				padding: 0 24px !important;
+				color: var(--text) !important;
+				background: var(--bg) !important;
+				white-space: normal !important;
+			}
+
+			.site-header,
+			.container,
+			.site-footer {
+				max-width: 1120px !important;
+				margin-left: auto !important;
+				margin-right: auto !important;
+			}
+
+			.site-header {
+				background: var(--header-bg) !important;
+				box-shadow: 0 0 0 100vmax var(--header-bg) !important;
+				clip-path: inset(0 -100vmax) !important;
+			}
+
+			.site-header a,
+			.site-nav a,
+			.site-footer a {
+				text-decoration: none !important;
+			}
+
+			.post {
+				max-width: 1040px !important;
+				padding: 34px 40px 46px !important;
+				border: 1px solid var(--github-border) !important;
+				border-radius: 6px !important;
+				background: var(--surface) !important;
+				color: var(--github-text) !important;
+			}
+
+			.post-header {
+				margin-bottom: 2.25rem !important;
+				text-align: left !important;
+			}
+
+			.post-title {
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 2rem !important;
+				font-weight: 600 !important;
+				line-height: 1.2 !important;
+			}
+
+			.post .page,
+			.post .page-body {
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 16px !important;
+				line-height: 1.65 !important;
+				text-align: left !important;
+				white-space: normal !important;
+			}
+
+			.post .page-body {
+				counter-reset: section;
+			}
+
+			.post .page p,
+			.post .page li,
+			.post .page .collection-content,
+			.post .page .simple-table,
+			.post .page .table_of_contents-item,
+			.post .page .bookmark-title,
+			.post .page .bookmark-description,
+			.post .page .bookmark-href {
+				color: var(--github-text) !important;
+				font-size: 1rem !important;
+				line-height: 1.65 !important;
+			}
+
+
+			.language-switch {
+				display: inline-flex !important;
+				gap: 4px !important;
+				margin-top: 1rem !important;
+				padding: 3px !important;
+				border: 1px solid var(--github-border) !important;
+				border-radius: 999px !important;
+				background: var(--github-bg) !important;
+				font-family: var(--sans) !important;
+			}
+
+			.language-option {
+				display: inline-flex !important;
+				align-items: center !important;
+				min-height: 30px !important;
+				padding: 0.25rem 0.8rem !important;
+				border-radius: 999px !important;
+				color: var(--github-muted) !important;
+				font-size: 0.78rem !important;
+				font-weight: 700 !important;
+				letter-spacing: 0.04em !important;
+				line-height: 1 !important;
+				text-decoration: none !important;
+			}
+
+			.language-option:hover {
+				color: var(--github-text) !important;
+				text-decoration: none !important;
+			}
+
+			.language-option.is-active {
+				background: var(--surface) !important;
+				color: var(--github-text) !important;
+				box-shadow: 0 1px 2px rgba(31, 35, 40, 0.08) !important;
+			}
+
+			.language-option.is-disabled {
+				color: #8c959f !important;
+				cursor: not-allowed !important;
+			}
+
+
+			.translation-note {
+				margin: 1.5rem 0 0 !important;
+				padding: 1.1rem 1.25rem !important;
+				border: 1px solid var(--github-border) !important;
+				border-left: 4px solid #0969da !important;
+				border-radius: 6px !important;
+				background: var(--github-bg) !important;
+			}
+
+			.translation-note .eyebrow {
+				margin-bottom: 0.55rem !important;
+				color: var(--github-muted) !important;
+				font-size: 0.78rem !important;
+				font-weight: 700 !important;
+				letter-spacing: 0.08em !important;
+				text-transform: uppercase !important;
+			}
+
+			.translation-note p:last-child {
+				margin-bottom: 0 !important;
+			}
+
+			.post .page h1 {
+				counter-increment: section;
+				counter-reset: subsection;
+				margin: 2rem 0 1rem !important;
+				padding-bottom: 0.35rem !important;
+				border-bottom: 1px solid var(--github-border) !important;
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 1.55rem !important;
+				font-weight: 600 !important;
+				line-height: 1.3 !important;
+			}
+
+			.post .page h1::before {
+				content: counter(section) ". ";
+				color: var(--github-muted);
+			}
+
+			.post .page h2 {
+				counter-increment: subsection;
+				counter-reset: subsubsection;
+				margin: 1.6rem 0 0.8rem !important;
+				padding-bottom: 0.25rem !important;
+				border-bottom: 1px solid var(--github-border) !important;
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 1.25rem !important;
+				font-weight: 600 !important;
+				line-height: 1.35 !important;
+			}
+
+			.post .page h2::before {
+				content: counter(section) "." counter(subsection) " ";
+				color: var(--github-muted);
+			}
+
+			.post .page h3 {
+				counter-increment: subsubsection;
+				margin: 1.35rem 0 0.65rem !important;
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 1.1rem !important;
+				font-weight: 600 !important;
+				line-height: 1.35 !important;
+			}
+
+			.post .page h3::before {
+				content: counter(section) "." counter(subsection) "." counter(subsubsection) " ";
+				color: var(--github-muted);
+			}
+
+			.post .page :not(pre) > code {
+				padding: 0.2em 0.4em !important;
+				border-radius: 6px !important;
+				background: rgba(175, 184, 193, 0.2) !important;
+				color: black !important;
+			}
+
+			.post .page pre.code,
+			.post .page pre.code.code-wrap {
+				overflow-x: auto !important;
+				padding: 1.25em 1em !important;
+				border: 1px solid var(--github-border) !important;
+				border-radius: 6px !important;
+				background: var(--github-bg) !important;
+				white-space: pre !important;
+				word-break: normal !important;
+			}
+
+			.post .page pre.code code {
+				color: #37352f !important;
+				white-space: pre !important;
+				word-break: normal !important;
+			}
+
+			.post .page table {
+				width: 100% !important;
+				border-collapse: collapse !important;
+			}
+
+			.post .page th,
+			.post .page td {
+				border: 1px solid var(--github-border) !important;
+				padding: 0.45rem 0.65rem !important;
+			}
+
+			.post .page th {
+				background: var(--github-bg) !important;
+				font-weight: 600 !important;
+			}
+
+			.post .page a {
+				color: #0969da !important;
+			}
+
+			.post .page a:hover {
+				text-decoration: underline !important;
+			}
+
+			.post .page .highlight-gray_background {
+				background: rgba(42, 28, 0, 0.07) !important;
+			}
+
+			.post .page .highlight-brown_background {
+				background: rgba(139, 46, 0, 0.086) !important;
+			}
+
+			.post .page .highlight-orange_background {
+				background: rgba(224, 101, 1, 0.129) !important;
+			}
+
+			.post .page .highlight-yellow_background {
+				background: rgba(211, 168, 0, 0.137) !important;
+			}
+
+			.post .page .highlight-teal_background {
+				background: rgba(0, 100, 45, 0.09) !important;
+			}
+
+			.post .page .highlight-blue_background {
+				background: rgba(0, 124, 215, 0.094) !important;
+			}
+
+			.post .page .highlight-purple_background {
+				background: rgba(102, 0, 178, 0.078) !important;
+			}
+
+			.post .page .highlight-pink_background {
+				background: rgba(197, 0, 93, 0.086) !important;
+			}
+
+			.post .page .highlight-red_background {
+				background: rgba(223, 22, 0, 0.094) !important;
+			}
+
+			.post .page .callout {
+				display: flex !important;
+				gap: 0.75rem !important;
+				margin: 1rem 0 !important;
+				padding: 0.8rem 1rem !important;
+				border: 1px solid var(--github-border) !important;
+				border-left: 4px solid #0969da !important;
+				border-radius: 6px !important;
+				background: var(--github-bg) !important;
+				white-space: normal !important;
+			}
+
+			.post .page figure {
+				margin: 1.4rem 0 !important;
+			}
+
+			.post .page .notion-text-equation-token .katex {
+				font-size: 1.12em !important;
+			}
+
+			.post .page .katex-display,
+			.post .page figure.equation .katex {
+				font-size: 1.18em !important;
+			}
+
+			.post .page .equation {
+				overflow-x: auto !important;
+				padding: 0.75rem 0 !important;
+			}
+
+			@media only screen and (max-width: 720px) {
+				.post {
+					padding: 24px 18px 34px !important;
+				}
+			}
+		</style>
+
+		<footer class="site-footer">
+			<a href="mailto:sharynhu826@gmail.com">sharynhu826@gmail.com</a>
+			<a href="https://github.com/SharynHu">github.com/SharynHu</a>
+		</footer>
+	</body>
+</html>

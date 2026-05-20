@@ -1,0 +1,286 @@
+---
+layout: post
+title: "HiCache"
+date: 2026-05-20
+lang: en
+lang_ref: hicache
+---
+<article class="page sans" id="hicache">
+  <div class="page-body">
+    <p>HiCache (Hierarchical Cache) is SGLang's extension of RadixAttention that adds a <strong>second tier of storage</strong>, host (CPU) memory, below the GPU KV cache. It solves the fundamental limitation of RadixAttention: the prefix tree can only hold as much as GPU VRAM allows, which is tiny compared to the amount of cacheable prefix data in real workloads.</p>
+
+    <h1>The problem HiCache solves</h1>
+    <p><mark class="highlight-pink_background"><strong>RadixAttention lives entirely in GPU memory.</strong></mark> Once the KV cache fills up, LRU eviction kicks in and old prefixes get permanently discarded. The next time a request needs that prefix, it has to be re-prefilled from scratch.</p>
+
+    <p>In real workloads, this is wasteful. Consider:</p>
+    <ul>
+      <li>A RAG system with 10,000 frequently queried documents, where only about 100 fit in GPU cache at once.</li>
+      <li>An agent platform with thousands of users, each with their own conversation history.</li>
+      <li>A code assistant serving a large codebase where different files rotate in and out.</li>
+    </ul>
+
+    <p><mark class="highlight-pink_background"><strong>The total working set of useful prefixes is often 10-100x larger than GPU VRAM.</strong></mark> But the access pattern is skewed: some prefixes are hot for a while, then cold, then hot again. Evicting them completely means paying the full prefill cost every time they come back.</p>
+
+    <h2>GPU memory hierarchy: it is a cache, not tiered storage</h2>
+    <p>The GPU memory hierarchy is:</p>
+    <figure class="image">
+      <svg role="img" aria-labelledby="gpu-hardware-cache-title gpu-hardware-cache-desc" viewBox="0 0 920 620" width="100%" xmlns="http://www.w3.org/2000/svg">
+        <title id="gpu-hardware-cache-title">GPU hardware cache hierarchy</title>
+        <desc id="gpu-hardware-cache-desc">A vertical hierarchy showing registers, L1 cache and shared memory, L2 cache, and HBM. It emphasizes that this is a hardware-managed cache path.</desc>
+        <defs>
+          <marker id="hicache-arrow-blue" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#4f8aa3"/>
+          </marker>
+          <linearGradient id="hardware-tier-fill" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stop-color="#f8fbfd"/>
+            <stop offset="100%" stop-color="#eef4f8"/>
+          </linearGradient>
+        </defs>
+        <rect x="20" y="20" width="880" height="580" rx="16" fill="#fbfbfb" stroke="#d0d7de" stroke-width="2"/>
+        <text x="460" y="70" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="700" fill="#24292f">GPU hardware cache hierarchy</text>
+        <text x="460" y="106" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#57606a">Hardware-managed, automatic, optimized for a single computation</text>
+        <g font-family="Helvetica, Arial, sans-serif">
+          <rect x="230" y="145" width="460" height="72" rx="12" fill="url(#hardware-tier-fill)" stroke="#4f8aa3" stroke-width="2"/>
+          <text x="460" y="174" text-anchor="middle" font-size="23" font-weight="700" fill="#24292f">Registers</text>
+          <text x="460" y="199" text-anchor="middle" font-size="17" fill="#57606a">per-thread, tiny, fastest</text>
+          <line x1="460" y1="232" x2="460" y2="278" stroke="#4f8aa3" stroke-width="3" marker-end="url(#hicache-arrow-blue)"/>
+
+          <rect x="230" y="292" width="460" height="72" rx="12" fill="url(#hardware-tier-fill)" stroke="#4f8aa3" stroke-width="2"/>
+          <text x="460" y="321" text-anchor="middle" font-size="23" font-weight="700" fill="#24292f">L1 cache / Shared memory</text>
+          <text x="460" y="346" text-anchor="middle" font-size="17" fill="#57606a">per-SM, about 128-256KB</text>
+          <line x1="460" y1="379" x2="460" y2="425" stroke="#4f8aa3" stroke-width="3" marker-end="url(#hicache-arrow-blue)"/>
+
+          <rect x="230" y="439" width="460" height="72" rx="12" fill="url(#hardware-tier-fill)" stroke="#4f8aa3" stroke-width="2"/>
+          <text x="460" y="468" text-anchor="middle" font-size="23" font-weight="700" fill="#24292f">L2 cache</text>
+          <text x="460" y="493" text-anchor="middle" font-size="17" fill="#57606a">GPU-wide, about 40-60MB on H100</text>
+          <line x1="460" y1="526" x2="460" y2="558" stroke="#4f8aa3" stroke-width="3" marker-end="url(#hicache-arrow-blue)"/>
+
+          <rect x="230" y="566" width="460" height="34" rx="10" fill="#fff5e6" stroke="#e8a15c" stroke-width="2"/>
+          <text x="460" y="589" text-anchor="middle" font-size="21" font-weight="700" fill="#7a3814">HBM: actual KV cache storage</text>
+        </g>
+      </svg>
+    </figure>
+
+    <p>But this is a <strong>hardware cache hierarchy</strong>, not a tiered storage hierarchy. The critical difference:</p>
+    <ul>
+      <li><strong>HBM</strong> is the actual storage. Your KV cache <strong>lives in HBM</strong>.</li>
+      <li><strong>L1 and L2</strong> are automatic caches that temporarily hold copies of recently accessed HBM data. They are managed by hardware, not software.</li>
+    </ul>
+
+    <h2>Where HiCache actually fits</h2>
+    <p>HiCache adds a tier <strong>above</strong> HBM from the storage perspective: closer to the user, further from compute, and much larger.</p>
+    <figure class="image">
+      <svg role="img" aria-labelledby="hicache-tier-title hicache-tier-desc" viewBox="0 0 980 680" width="100%" xmlns="http://www.w3.org/2000/svg">
+        <title id="hicache-tier-title">Where HiCache fits in the memory hierarchy</title>
+        <desc id="hicache-tier-desc">A vertical diagram showing GPU L1/L2 cache, GPU HBM, host DDR RAM, and recompute from scratch. HiCache spills KV blocks from HBM to host memory when HBM is full.</desc>
+        <defs>
+          <marker id="hicache-arrow-orange" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#d97706"/>
+          </marker>
+          <marker id="hicache-arrow-gray" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a8a8a"/>
+          </marker>
+        </defs>
+        <rect x="20" y="20" width="940" height="640" rx="16" fill="#fbfbfb" stroke="#d0d7de" stroke-width="2"/>
+        <text x="490" y="70" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="700" fill="#24292f">HiCache adds a software-managed tier</text>
+        <text x="490" y="106" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#57606a">L1/L2 are hardware caches; HiCache moves KV blocks between HBM and host RAM</text>
+        <g font-family="Helvetica, Arial, sans-serif">
+          <rect x="250" y="145" width="480" height="74" rx="12" fill="#eef4f8" stroke="#4f8aa3" stroke-width="2"/>
+          <text x="490" y="175" text-anchor="middle" font-size="23" font-weight="700" fill="#24292f">GPU L1 / L2 cache</text>
+          <text x="490" y="201" text-anchor="middle" font-size="17" fill="#57606a">hardware-managed, automatic</text>
+          <line x1="490" y1="235" x2="490" y2="280" stroke="#8a8a8a" stroke-width="3" marker-end="url(#hicache-arrow-gray)"/>
+
+          <rect x="250" y="294" width="480" height="86" rx="12" fill="#fff5e6" stroke="#e8a15c" stroke-width="2"/>
+          <text x="490" y="327" text-anchor="middle" font-size="24" font-weight="700" fill="#7a3814">GPU HBM</text>
+          <text x="490" y="354" text-anchor="middle" font-size="17" fill="#7a3814">KV cache lives here: RadixAttention tree</text>
+          <path d="M490 397 C490 418 490 438 490 462" stroke="#d97706" stroke-width="4" fill="none" marker-end="url(#hicache-arrow-orange)"/>
+          <text x="670" y="430" font-size="18" fill="#7a3814">spill when HBM is full</text>
+
+          <rect x="250" y="478" width="480" height="86" rx="12" fill="#f2f7ff" stroke="#4f8aa3" stroke-width="2"/>
+          <text x="490" y="511" text-anchor="middle" font-size="24" font-weight="700" fill="#245f7a">Host DDR RAM</text>
+          <text x="490" y="538" text-anchor="middle" font-size="17" fill="#57606a">software-managed explicit copies, hundreds of GB</text>
+          <line x1="490" y1="581" x2="490" y2="610" stroke="#8a8a8a" stroke-width="3" stroke-dasharray="8 8" marker-end="url(#hicache-arrow-gray)"/>
+
+          <rect x="250" y="624" width="480" height="36" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="2"/>
+          <text x="490" y="648" text-anchor="middle" font-size="20" font-weight="700" fill="#57606a">Worst case: recompute from scratch</text>
+        </g>
+      </svg>
+    </figure>
+
+    <p>Notice that HiCache operates <strong>below</strong> the hardware cache hierarchy, not within it. The L1/L2 caches do not care what HiCache is doing. They just see HBM reads and writes like normal. <mark class="highlight-pink_background"><strong>HiCache's tiering is at a completely different level: it is software-managed, explicit, and operates on KV cache blocks, while L1/L2 operate on cache lines automatically.</strong></mark></p>
+
+    <h2>Why this distinction matters</h2>
+    <p>The two hierarchies have very different characteristics:</p>
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>Hardware cache (L1/L2)</th>
+          <th>Software tier (HiCache)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Managed by</td>
+          <td>GPU hardware</td>
+          <td>Serving framework code</td>
+        </tr>
+        <tr>
+          <td>Granularity</td>
+          <td>128-byte cache lines</td>
+          <td>KV blocks (thousands of bytes)</td>
+        </tr>
+        <tr>
+          <td>Transparency</td>
+          <td>Invisible to software</td>
+          <td>Explicit API calls</td>
+        </tr>
+        <tr>
+          <td>Eviction policy</td>
+          <td>Hardware-defined approximate LRU</td>
+          <td>Software-defined LRU, LFU, or custom policy</td>
+        </tr>
+        <tr>
+          <td>Speed</td>
+          <td><mark class="highlight-pink_background"><strong>Sub-microsecond</strong></mark></td>
+          <td><mark class="highlight-pink_background"><strong>Milliseconds, usually PCIe transfer</strong></mark></td>
+        </tr>
+        <tr>
+          <td>Capacity</td>
+          <td>Tens of MB</td>
+          <td>Hundreds of GB</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>HiCache and the L1/L2 hardware cache coexist, but they do not interact directly. When a KV block is read from HBM during attention, it flows through L2 and L1 automatically to reach the Tensor Cores. That happens regardless of HiCache. <mark class="highlight-pink_background"><strong>HiCache only kicks in at eviction time: when HBM is full and the cache manager needs to decide what to do with evicted blocks.</strong></mark></p>
+
+    <aside class="callout">
+      <p><strong>👉 The mental model</strong></p>
+      <p>Hardware caches handle spatial and temporal locality <em>within</em> a single computation. Software tiers like HiCache handle <em>semantic</em> reuse across different computations: same prefix, different requests, different points in time. They are solving different problems.</p>
+    </aside>
+
+    <h1>The core idea: tiered storage</h1>
+    <p>HiCache adds a <strong>host memory tier</strong> below the GPU cache. The memory hierarchy becomes:</p>
+    <figure class="image">
+      <svg role="img" aria-labelledby="tiered-storage-title tiered-storage-desc" viewBox="0 0 920 520" width="100%" xmlns="http://www.w3.org/2000/svg">
+        <title id="tiered-storage-title">HiCache tiered storage policy</title>
+        <desc id="tiered-storage-desc">A three-level diagram showing GPU KV cache, host memory cache, and gone/re-prefill. Evictions move blocks downward instead of immediately discarding them.</desc>
+        <defs>
+          <marker id="tiered-arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#d97706"/>
+          </marker>
+        </defs>
+        <rect x="20" y="20" width="880" height="480" rx="16" fill="#fbfbfb" stroke="#d0d7de" stroke-width="2"/>
+        <text x="460" y="70" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="700" fill="#24292f">Tiered KV cache storage</text>
+        <text x="460" y="106" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#57606a">Eviction becomes movement to a slower tier, not immediate loss</text>
+        <g font-family="Helvetica, Arial, sans-serif">
+          <rect x="225" y="145" width="470" height="78" rx="12" fill="#fff5e6" stroke="#e8a15c" stroke-width="2"/>
+          <text x="460" y="177" text-anchor="middle" font-size="24" font-weight="700" fill="#7a3814">GPU KV cache</text>
+          <text x="460" y="203" text-anchor="middle" font-size="17" fill="#7a3814">fast, about 40-80GB</text>
+
+          <path d="M460 240 L460 292" stroke="#d97706" stroke-width="4" marker-end="url(#tiered-arrow)"/>
+          <text x="500" y="270" font-size="18" fill="#7a3814">evict when full</text>
+
+          <rect x="225" y="307" width="470" height="78" rx="12" fill="#f2f7ff" stroke="#4f8aa3" stroke-width="2"/>
+          <text x="460" y="339" text-anchor="middle" font-size="24" font-weight="700" fill="#245f7a">Host memory cache</text>
+          <text x="460" y="365" text-anchor="middle" font-size="17" fill="#57606a">slower, about 500GB-1TB</text>
+
+          <path d="M460 402 L460 442" stroke="#d97706" stroke-width="4" stroke-dasharray="10 8" marker-end="url(#tiered-arrow)"/>
+          <text x="500" y="425" font-size="18" fill="#7a3814">evict when full</text>
+
+          <rect x="225" y="456" width="470" height="44" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="2"/>
+          <text x="460" y="484" text-anchor="middle" font-size="21" font-weight="700" fill="#57606a">Gone: must re-prefill</text>
+        </g>
+      </svg>
+    </figure>
+
+    <p>When a prefix gets evicted from GPU cache, instead of being discarded, it is <strong>copied to CPU RAM</strong>. If a future request needs it, the prefix can be loaded back from host memory over PCIe. This is slower than a GPU cache hit, but much faster than re-prefilling from scratch.</p>
+
+    <h1>Why host memory is attractive</h1>
+    <p>Host memory is cheap and plentiful compared to VRAM:</p>
+    <ul>
+      <li>H100 GPU: 80GB VRAM, expensive and bandwidth-starved.</li>
+      <li>Server CPU: 512GB-2TB DDR5 RAM, cheap and plentiful.</li>
+    </ul>
+
+    <p>The PCIe bandwidth between CPU and GPU, about 64 GB/s on PCIe 5.0 and about 900 GB/s on NVLink-C2C for Grace Hopper, is much slower than HBM bandwidth, about 3.3 TB/s on H100. But it is still much faster than recomputing a prefill.</p>
+
+    <p>Rough comparison for a 2000-token prefix hit:</p>
+    <ul>
+      <li>GPU cache hit: about 0ms, because the KV blocks are already there.</li>
+      <li>Host cache hit: about 10-50ms, mainly PCIe transfer.</li>
+      <li>Cache miss: about 500ms or more, because the model must redo full prefill on a 70B model.</li>
+    </ul>
+
+    <p><mark class="highlight-pink_background"><strong>So even a slow host cache hit is often 10-50x faster than re-prefilling.</strong></mark></p>
+
+    <h1>How it works</h1>
+    <p>HiCache extends the radix tree across both tiers:</p>
+<pre class="code code-wrap language-python"><code class="language-python"># Simplified lookup logic
+def lookup(tokens):
+    gpu_match = gpu_radix_tree.longest_prefix(tokens)
+    if gpu_match.length == len(tokens):
+        return gpu_match  # full GPU hit, cheapest
+
+    # Check host cache for the part GPU did not cover
+    host_match = host_radix_tree.prefix_after(gpu_match, tokens)
+    if host_match:
+        # Load host blocks back into GPU cache
+        load_from_host_to_gpu(host_match)
+        return gpu_match + host_match
+
+    # Fall through to prefilling the uncached suffix
+    return prefill_missing(tokens, after=gpu_match.length)</code></pre>
+
+    <p>The radix tree structure is replicated across tiers. Each node knows whether its KV data lives in GPU, CPU, or both. Eviction does not delete the tree node. It just moves the data to the next tier down.</p>
+
+    <h1>Runtime attach/detach</h1>
+    <p>"Runtime attach/detach" in HiCache refers to the ability to <strong>dynamically add or remove host memory tiers</strong> from a running SGLang serving instance <strong>without restarting the server</strong>. You can attach more host RAM as a cache tier on the fly when memory pressure is high, or detach it to free memory when it is no longer needed.</p>
+
+    <p>This matters because, in a production serving system, restarting means dropping all in-flight requests and reloading the model, which can take minutes for large models. Being able to reconfigure the cache hierarchy while the server keeps serving is a significant operational win.</p>
+
+    <p><strong>Typical use cases:</strong></p>
+    <ul>
+      <li><strong>Scaling up under load:</strong> during traffic spikes, attach additional host memory to hold more prefixes and reduce re-prefill pressure. When traffic subsides, detach it and return memory to other workloads on the same machine.</li>
+      <li><strong>Multi-tenant servers:</strong> different tenants or models can have host memory allocated or deallocated as workload demand shifts.</li>
+      <li><strong>Testing and tuning:</strong> operators can experiment with different cache sizes without server restarts to find the best setting for a workload.</li>
+    </ul>
+
+    <p><strong>How it works mechanically:</strong> when you attach a new tier, HiCache registers the memory region with the cache manager and starts including it in eviction and spill decisions. When you detach, the manager stops accepting new writes to that tier, evicts any remaining blocks, either back to GPU if there is room or by discarding them, and releases the memory back to the OS. The radix tree structure stays intact throughout. Only the backing storage changes.</p>
+
+    <h1>Key design decisions</h1>
+    <ul>
+      <li><strong>Asynchronous transfers:</strong> copying between GPU and CPU uses CUDA streams that can overlap with compute. While the GPU is running prefill for uncached tokens, host-to-device transfers can happen in parallel, hiding much of the PCIe latency.</li>
+      <li><strong>Block-level granularity:</strong> moving individual KV blocks, typically 16 or 64 tokens each, instead of whole sequences. This allows partial matches. If the first 1500 tokens of a 2000-token prefix are in host cache and the next 400 are in GPU cache, the runtime can pull the missing blocks selectively.</li>
+      <li><strong>Write-through or write-back policies:</strong> HiCache typically uses write-back. New KV data stays in GPU until evicted, then gets copied to host. Write-through, always mirroring to host immediately, is simpler but wastes PCIe bandwidth.</li>
+      <li><strong>Admission control:</strong> not every evicted prefix is worth keeping in host cache. HiCache tracks reuse likelihood, for example with access frequency, and skips admission for one-off prefixes.</li>
+    </ul>
+
+    <h1>When HiCache helps and when it does not</h1>
+    <p><strong>Big wins:</strong></p>
+    <ul>
+      <li>RAG with a large document corpus, where most queries hit a small subset but that subset rotates.</li>
+      <li>Multi-tenant serving where per-user conversation history exceeds GPU capacity.</li>
+      <li>Agent systems with many tool-calling sessions, each with long system prompts.</li>
+      <li>Anywhere the working set of hot prefixes is larger than VRAM but smaller than DDR.</li>
+    </ul>
+
+    <p><strong>Minimal benefit:</strong></p>
+    <ul>
+      <li>Completely unique prompts every time, because there is no prefix reuse anyway.</li>
+      <li>A small total prompt database that already fits in GPU cache.</li>
+      <li>Workloads dominated by decoding. HiCache only helps prefill, like RadixAttention.</li>
+    </ul>
+
+    <h1>Connection to the broader trend</h1>
+    <p>HiCache is part of a broader move in LLM serving toward <strong>hierarchical KV storage</strong>. There is active research on going even further:</p>
+    <ul>
+      <li><strong>Disk-tier caching:</strong> SSDs as a third tier below host memory. This is useful for truly massive prefix databases at the cost of much higher latency.</li>
+      <li><strong>Distributed prefix caching:</strong> sharing prefix caches across multiple serving nodes, so a user's conversation does not need to land on the same GPU every time.</li>
+      <li><strong>Semantic caching:</strong> going beyond exact prefix match to approximate matching, such as the same document paraphrased or similar questions.</li>
+    </ul>
+
+    <p>HiCache specifically targets the GPU-to-host tier because that is the biggest free-lunch opportunity: host memory is already present on every serving node, the transfer infrastructure such as PCIe and CUDA streams is mature, and the latency is small enough that the tradeoff clearly favors cache over recompute.</p>
+  </div>
+</article>
