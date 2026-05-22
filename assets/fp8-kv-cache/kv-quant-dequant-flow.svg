@@ -1,107 +1,88 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="520" viewBox="0 0 1700 520" role="img" aria-labelledby="title desc">
-  <title id="title">FP8 KV cache quantization and dequantization pipeline</title>
-  <desc id="desc">A straight pipeline showing FP16/BF16 K and V values being quantized into FP8 cache storage, then dequantized back into approximate K and V values for attention.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1040" viewBox="0 0 1200 1040" role="img" aria-labelledby="title desc">
+  <title id="title">FP8 KV cache write and read paths</title>
+  <desc id="desc">Hand-drawn style diagram showing the write cache path, read cache path, and shared quant scale metadata.</desc>
   <defs>
-    <filter id="shadow" x="-10%" y="-30%" width="120%" height="170%">
-      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#102030" flood-opacity="0.13"/>
-    </filter>
-    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
-    </marker>
-    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#d97706"/>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#050505"/>
     </marker>
     <style>
       text {
-        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: "Comic Sans MS", "Chalkboard SE", "Bradley Hand", "Segoe Print", cursive;
+        fill: #050505;
       }
-      .title {
-        font-size: 34px;
-        font-weight: 800;
-        fill: #18202a;
-      }
-      .subtitle {
-        font-size: 19px;
+      .heading {
+        font-size: 50px;
         font-weight: 500;
-        fill: #64748b;
       }
-      .step-title {
+      .box-title {
+        font-size: 28px;
+        font-weight: 500;
+      }
+      .box-small {
         font-size: 22px;
-        font-weight: 800;
+        font-weight: 500;
       }
-      .step-text {
-        font-size: 17px;
-        font-weight: 560;
-      }
-      .label {
-        font-size: 17px;
-        font-weight: 750;
-      }
-      .small {
-        font-size: 15px;
-        font-weight: 650;
+      .metadata {
+        font-size: 42px;
+        font-weight: 500;
       }
     </style>
   </defs>
 
-  <rect x="24" y="24" width="1652" height="472" rx="30" fill="#fbfaf8"/>
-  <text x="70" y="78" class="title">FP8 KV Cache: Straight Write / Read Pipeline</text>
-  <text x="70" y="112" class="subtitle">Quantization happens when writing cache; dequantization happens when reading cache. The external quantization scale travels as metadata.</text>
+  <rect width="1200" height="1040" fill="#ffffff"/>
 
-  <rect x="70" y="146" width="710" height="276" rx="22" fill="#eff6ff" stroke="#bfdbfe" stroke-width="2"/>
-  <rect x="920" y="146" width="710" height="276" rx="22" fill="#fff7ed" stroke="#fed7aa" stroke-width="2"/>
-  <text x="106" y="184" class="label" fill="#1d4ed8">WRITE CACHE: quantize</text>
-  <text x="956" y="184" class="label" fill="#b45309">READ CACHE: dequantize</text>
+  <text x="34" y="105" class="heading">write cache path</text>
+  <text x="680" y="105" class="heading">read cache path</text>
 
-  <g filter="url(#shadow)">
-    <rect x="100" y="224" width="170" height="116" rx="15" fill="#ffffff" stroke="#93c5fd" stroke-width="2"/>
-    <rect x="330" y="224" width="180" height="116" rx="15" fill="#ffffff" stroke="#93c5fd" stroke-width="2"/>
-    <rect x="570" y="224" width="180" height="116" rx="15" fill="#ffffff" stroke="#93c5fd" stroke-width="2"/>
+  <g fill="none" stroke="#050505" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M153 166 C206 168 280 171 396 164 C402 190 396 214 395 238 C322 239 259 241 200 236 C181 244 158 238 153 237 C149 211 148 188 153 166 Z"/>
+    <path d="M162 310 C240 304 321 310 395 301 C408 328 398 357 394 389 C315 392 257 387 198 389 C182 393 166 392 160 388 C163 356 159 331 162 310 Z"/>
+    <path d="M180 478 C254 483 321 477 415 472 C422 503 409 525 404 555 C324 549 260 554 180 558 C169 548 171 506 180 478 Z"/>
+    <path d="M191 642 L401 642 L401 729 L191 729 Z"/>
 
-    <rect x="770" y="214" width="180" height="136" rx="18" fill="#f8fafc" stroke="#94a3b8" stroke-width="2.5"/>
+    <path d="M805 167 C844 159 883 156 928 159 C963 162 993 154 1018 165 C1019 188 1013 217 1008 233 C961 240 902 230 845 235 C827 224 816 212 805 224 C791 207 797 182 805 167 Z"/>
+    <path d="M782 322 C846 313 913 312 1042 324 C1044 348 1034 377 1028 390 C974 401 919 389 864 394 C828 391 793 398 782 375 C776 357 777 338 782 322 Z"/>
+    <path d="M784 464 C866 456 933 465 1027 462 C1036 485 1027 526 1015 540 C935 545 872 541 795 540 C785 522 778 489 784 464 Z"/>
+    <path d="M769 637 C849 628 930 642 1034 639 C1044 662 1037 699 1025 713 C941 724 872 713 769 711 C761 689 762 661 769 637 Z"/>
 
-    <rect x="970" y="224" width="180" height="116" rx="15" fill="#ffffff" stroke="#fdba74" stroke-width="2"/>
-    <rect x="1210" y="224" width="180" height="116" rx="15" fill="#ffffff" stroke="#fdba74" stroke-width="2"/>
-    <rect x="1450" y="224" width="150" height="116" rx="15" fill="#ffffff" stroke="#fdba74" stroke-width="2"/>
+    <path d="M314 865 C493 838 711 876 1019 863 C1035 869 1035 903 1028 934 C777 954 534 950 330 935 C314 919 310 891 314 865 Z"/>
   </g>
 
-  <text x="185" y="265" text-anchor="middle" class="step-title" fill="#1e3a8a">FP16/BF16</text>
-  <text x="185" y="296" text-anchor="middle" class="step-text" fill="#334155">K,V values</text>
+  <text x="274" y="201" text-anchor="middle" class="box-title">FP16/BF16 K,V</text>
+  <text x="274" y="225" text-anchor="middle" class="box-small">produced by model</text>
 
-  <text x="420" y="260" text-anchor="middle" class="step-title" fill="#1e3a8a">divide by</text>
-  <text x="420" y="290" text-anchor="middle" class="step-title" fill="#1e3a8a">quant scale</text>
-  <text x="420" y="318" text-anchor="middle" class="small" fill="#64748b">external metadata</text>
+  <text x="278" y="346" text-anchor="middle" class="box-title">divide by</text>
+  <text x="278" y="374" text-anchor="middle" class="box-title">quant scale</text>
 
-  <text x="660" y="265" text-anchor="middle" class="step-title" fill="#1e3a8a">round / clamp</text>
-  <text x="660" y="296" text-anchor="middle" class="step-text" fill="#334155">to FP8 values</text>
+  <text x="292" y="516" text-anchor="middle" class="box-title">round / clamp</text>
+  <text x="292" y="542" text-anchor="middle" class="box-small">to FP8 value</text>
 
-  <text x="860" y="255" text-anchor="middle" class="step-title" fill="#334155">KV cache</text>
-  <text x="860" y="287" text-anchor="middle" class="step-text" fill="#475569">FP8 bytes</text>
-  <text x="860" y="315" text-anchor="middle" class="step-text" fill="#475569">+ quant scale</text>
+  <text x="296" y="677" text-anchor="middle" class="box-title">store cache</text>
+  <text x="296" y="705" text-anchor="middle" class="box-small">FP8 bytes</text>
 
-  <text x="1060" y="260" text-anchor="middle" class="step-title" fill="#92400e">decode FP8</text>
-  <text x="1060" y="290" text-anchor="middle" class="step-text" fill="#334155">sign / exp / mantissa</text>
-  <text x="1060" y="318" text-anchor="middle" class="small" fill="#64748b">internal exponent scale</text>
+  <text x="910" y="203" text-anchor="middle" class="box-title">load cache</text>
+  <text x="910" y="229" text-anchor="middle" class="box-small">FP8 bytes</text>
 
-  <text x="1300" y="260" text-anchor="middle" class="step-title" fill="#92400e">multiply by</text>
-  <text x="1300" y="290" text-anchor="middle" class="step-title" fill="#92400e">quant scale</text>
-  <text x="1300" y="318" text-anchor="middle" class="small" fill="#64748b">external metadata</text>
+  <text x="912" y="358" text-anchor="middle" class="box-title">decode FP8 byte</text>
+  <text x="912" y="384" text-anchor="middle" class="box-small">sign / exp / mantissa</text>
 
-  <text x="1525" y="265" text-anchor="middle" class="step-title" fill="#92400e">approx K,V</text>
-  <text x="1525" y="296" text-anchor="middle" class="step-text" fill="#334155">used by attention</text>
+  <text x="906" y="497" text-anchor="middle" class="box-title">multiply by</text>
+  <text x="906" y="525" text-anchor="middle" class="box-title">quant scale</text>
 
-  <line x1="270" y1="282" x2="318" y2="282" stroke="#2563eb" stroke-width="4" marker-end="url(#arrow-blue)"/>
-  <line x1="510" y1="282" x2="558" y2="282" stroke="#2563eb" stroke-width="4" marker-end="url(#arrow-blue)"/>
-  <line x1="750" y1="282" x2="758" y2="282" stroke="#2563eb" stroke-width="4" marker-end="url(#arrow-blue)"/>
-  <line x1="950" y1="282" x2="958" y2="282" stroke="#d97706" stroke-width="4" marker-end="url(#arrow-amber)"/>
-  <line x1="1150" y1="282" x2="1198" y2="282" stroke="#d97706" stroke-width="4" marker-end="url(#arrow-amber)"/>
-  <line x1="1390" y1="282" x2="1438" y2="282" stroke="#d97706" stroke-width="4" marker-end="url(#arrow-amber)"/>
+  <text x="899" y="675" text-anchor="middle" class="box-title">approx K,V</text>
+  <text x="899" y="702" text-anchor="middle" class="box-small">used by attention</text>
 
-  <rect x="118" y="382" width="600" height="28" rx="14" fill="#dbeafe"/>
-  <text x="418" y="402" text-anchor="middle" class="small" fill="#1e3a8a">write path stores compact FP8 cache</text>
+  <text x="670" y="920" text-anchor="middle" class="metadata">Quant scale metadata</text>
 
-  <rect x="982" y="382" width="590" height="28" rx="14" fill="#ffedd5"/>
-  <text x="1277" y="402" text-anchor="middle" class="small" fill="#92400e">read path reconstructs approximate higher-precision values</text>
-
-  <text x="850" y="458" text-anchor="middle" class="small" fill="#64748b">Only the FP8 byte is the dtype value. The quant scale is separate metadata associated with the cache tensor/block.</text>
+  <g fill="none" stroke="#050505" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)">
+    <path d="M282 236 C282 260 279 281 279 301"/>
+    <path d="M278 389 C275 422 276 447 279 468"/>
+    <path d="M287 558 C291 589 293 614 293 634"/>
+    <path d="M909 236 C910 263 910 289 910 312"/>
+    <path d="M909 394 C910 419 909 441 909 455"/>
+    <path d="M908 542 C909 581 909 611 906 629"/>
+    <path d="M392 860 C393 802 353 763 312 743"/>
+    <path d="M623 842 C533 716 540 518 642 366 C696 283 746 220 795 200"/>
+    <path d="M796 848 C834 773 875 697 899 552"/>
+  </g>
 </svg>
