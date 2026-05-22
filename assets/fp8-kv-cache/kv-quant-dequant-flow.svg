@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1040" viewBox="0 0 1440 1040" role="img" aria-labelledby="title desc">
   <title id="title">FP8 KV cache write and read flow</title>
-  <desc id="desc">A flat technical diagram showing the FP8 KV cache write path, read path, and external quantization scale metadata.</desc>
+  <desc id="desc">A flat technical diagram showing the unfused FP8 KV cache write path, read path, FP8 dtype rules, and external quantization scale metadata.</desc>
   <defs>
     <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
@@ -43,7 +43,7 @@
         font-weight: 760;
       }
       .meta-title {
-        font-size: 27px;
+        font-size: 25px;
         font-weight: 830;
         fill: #334155;
       }
@@ -58,8 +58,8 @@
   <rect width="1440" height="1040" fill="#ffffff"/>
   <rect x="32" y="32" width="1376" height="976" rx="28" fill="#fbfaf8" stroke="#e2e8f0" stroke-width="2"/>
 
-  <text x="86" y="96" class="title">FP8 KV Cache: Quantize on Write, Dequantize on Read</text>
-  <text x="86" y="130" class="subtitle">FP8 bytes carry the compact values. Quant-scale metadata tells the backend how to map them back to tensor values.</text>
+  <text x="86" y="96" class="title">FP8 KV Cache: Unfused Encode / Decode Pipeline</text>
+  <text x="86" y="130" class="subtitle">Quant scale maps tensor range. FP8 dtype rules encode and decode each stored byte.</text>
 
   <rect x="86" y="178" width="520" height="610" rx="22" fill="#eef6ff" stroke="#93c5fd" stroke-width="2"/>
   <rect x="834" y="178" width="520" height="610" rx="22" fill="#fff6eb" stroke="#fdba74" stroke-width="2"/>
@@ -84,11 +84,11 @@
   <text x="346" y="462" text-anchor="middle" class="step-title" fill="#1e3a8a">Divide by quant scale</text>
   <text x="346" y="493" text-anchor="middle" class="step-copy">fit tensor values into FP8 range</text>
 
-  <text x="346" y="610" text-anchor="middle" class="step-title" fill="#1e3a8a">Round / clamp</text>
-  <text x="346" y="641" text-anchor="middle" class="step-copy">choose nearest representable FP8 value</text>
+  <text x="346" y="610" text-anchor="middle" class="step-title" fill="#1e3a8a">Encode as FP8</text>
+  <text x="346" y="641" text-anchor="middle" class="step-copy">round / clamp using FP8 rules</text>
 
   <text x="346" y="758" text-anchor="middle" class="step-title" fill="#1e3a8a">Store cache</text>
-  <text x="346" y="789" text-anchor="middle" class="step-copy">FP8 bytes</text>
+  <text x="346" y="789" text-anchor="middle" class="step-copy">FP8 bytes in memory</text>
 
   <text x="1094" y="313" text-anchor="middle" class="step-title" fill="#9a3412">Load cache</text>
   <text x="1094" y="344" text-anchor="middle" class="step-copy">FP8 bytes</text>
@@ -100,7 +100,7 @@
   <text x="1094" y="641" text-anchor="middle" class="step-copy">recover approximate K,V</text>
 
   <text x="1094" y="758" text-anchor="middle" class="step-title" fill="#9a3412">Attention uses K,V</text>
-  <text x="1094" y="789" text-anchor="middle" class="step-copy">dequant may be fused into kernel</text>
+  <text x="1094" y="789" text-anchor="middle" class="step-copy">after dequantization</text>
 
   <g fill="none" stroke-linecap="round" stroke-linejoin="round">
     <path d="M346 372 L346 411" stroke="#2563eb" stroke-width="4" marker-end="url(#arrowBlue)"/>
@@ -111,18 +111,28 @@
     <path d="M1094 668 L1094 707" stroke="#ea580c" stroke-width="4" marker-end="url(#arrowOrange)"/>
   </g>
 
+  <rect x="588" y="276" width="264" height="244" rx="16" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/>
+  <text x="720" y="318" text-anchor="middle" class="meta-title">FP8 dtype rules</text>
+  <text x="720" y="354" text-anchor="middle" class="meta-copy">sign / exponent / mantissa</text>
+  <text x="720" y="386" text-anchor="middle" class="meta-copy">exponent bias</text>
+  <text x="720" y="418" text-anchor="middle" class="meta-copy">internal exponent scale</text>
+  <text x="720" y="450" text-anchor="middle" class="meta-copy">rounding / saturation</text>
+  <text x="720" y="482" text-anchor="middle" class="meta-copy">not tensor metadata</text>
+
   <rect x="390" y="868" width="660" height="92" rx="18" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/>
   <text x="720" y="906" text-anchor="middle" class="meta-title">Quant scale metadata</text>
-  <text x="720" y="936" text-anchor="middle" class="meta-copy">stored alongside or associated with the KV cache region</text>
+  <text x="720" y="936" text-anchor="middle" class="meta-copy">calibrated/configured; associated with cache, not part of FP8 byte</text>
 
   <g fill="none" stroke="#64748b" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="8 9">
-    <path d="M508 868 C454 836 410 806 360 817 C338 821 330 833 325 853 C317 887 320 830 340 790" marker-end="url(#arrowMeta)"/>
-    <path d="M932 868 C980 838 1028 812 1080 823 C1108 829 1126 848 1126 874 C1127 904 1143 846 1107 790" marker-end="url(#arrowMeta)"/>
+    <path d="M390 914 L106 914 L106 472 L142 472" marker-end="url(#arrowMeta)"/>
+    <path d="M1050 914 L1334 914 L1334 620 L1298 620" marker-end="url(#arrowMeta)"/>
+    <path d="M588 404 L562 404 L562 620 L550 620" marker-end="url(#arrowMeta)"/>
+    <path d="M852 404 L878 404 L878 472 L890 472" marker-end="url(#arrowMeta)"/>
   </g>
 
   <rect x="132" y="848" width="428" height="28" rx="14" fill="#dbeafe"/>
-  <text x="346" y="868" text-anchor="middle" class="chip" fill="#1e3a8a">write: scale is used before FP8 rounding</text>
+  <text x="346" y="868" text-anchor="middle" class="chip" fill="#1e3a8a">write: quant scale is used before FP8 encoding</text>
 
   <rect x="880" y="848" width="428" height="28" rx="14" fill="#ffedd5"/>
-  <text x="1094" y="868" text-anchor="middle" class="chip" fill="#9a3412">read: scale reconstructs approximate K,V</text>
+  <text x="1094" y="868" text-anchor="middle" class="chip" fill="#9a3412">read: quant scale is used after FP8 decoding</text>
 </svg>
