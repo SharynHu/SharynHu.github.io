@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>FP8 KV Cache | Sharyn Hu</title>
+		<link rel="stylesheet" type="text/css" href="/css/main.css">
+		<link rel="stylesheet" href="/css/syntax.css">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" integrity="sha512-tN7Ec6zAFaVSG3TpNAKtk4DOHNpSwKHxxrsiw4GHKESGPs5njn/0sMCUMl2svV4wo4BK/rCP7juYz+zx+l6oeQ==" crossorigin="anonymous" referrerpolicy="no-referrer">
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js" integrity="sha512-7Z9J3l1+EYfeaPKcGXu3MS/7T+w19WtKQY/n+xzmw4hZhJ9tyYmcUS+4QqAlzhicE5LAfMQSF3iFTK9bQdTxXg==" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+		<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+		<script type="text/x-mathjax-config">
+			MathJax.Hub.Config({
+				tex2jax: {
+					skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+					inlineMath: [['$','$']]
+				}
+			});
+		</script>
+	</head>
+	<body>
+		
+			<header class="site-header">
+				<a class="site-title" href="/">Sharyn Hu</a>
+				<p class="site-tagline">Notes on computer science, systems, and machine learning.</p>
+				<nav class="site-nav">
+					<a href="/">Home</a>
+					<a href="/blog">Blog</a>
+				</nav>
+			</header>
+		
+
+		<main class="container">
+			<article class="post">
+	<header class="post-header">
+		<p class="meta">22 May 2026</p>
+		<h1 class="post-title">FP8 KV Cache</h1>
+		<nav class="language-switch" aria-label="Post language"><span class="language-option is-active" aria-current="true">English</span><a class="language-option" href="/blog/2026/05/22/fp8-kv-cache-zh">中文</a></nav>
+	</header>
+	<article class="page sans" id="fp8-kv-cache">
+  <div class="page-body">
+    <p>The idea is simple: instead of storing KV cache tensors in FP16/BF16 (2 bytes per value), you quantize them down to FP8 (1 byte per value), roughly cutting the raw KV cache memory in half.</p>
+
+    <p>A useful rule of thumb:</p>
+    <div class="math-display">
+\[
+\begin{aligned}
+\text{KV cache size} \approx {} & 2 \times \text{num layers} \times \text{batch size} \times \text{sequence length} \\
+& \times \text{KV heads} \times \text{head dimension} \times \text{bytes per element}
+\end{aligned}
+\]
+    </div>
+
+    <ul>
+      <li>FP16/BF16 uses 2 bytes per value.</li>
+      <li>FP8 uses 1 byte per value, so the same memory budget can hold roughly 2× as many KV values before scale/metadata overhead.</li>
+    </ul>
+
+    <h1>Floating Point Representation</h1>
+    <p>A floating point number is represented in binary using 3 fields:</p>
+    <figure>
+      <img src="/assets/fp8-kv-cache/floating-point-fields.svg?v=a1cac23" alt="Floating point bit layout showing sign, exponent, and mantissa fields">
+      <figcaption>A floating point value is stored as sign, exponent, and mantissa fields.</figcaption>
+    </figure>
+
+    <p>In binary floating point:</p>
+    <ul>
+      <li><strong>sign</strong> → positive or negative</li>
+      <li><strong>exponent</strong> → the internal power-of-two scale inside the floating-point value</li>
+      <li><strong>mantissa</strong> → the actual digits (the precision)</li>
+    </ul>
+
+    <h2>How to get the FP number from its representation</h2>
+    <p>For <strong>normalized finite values</strong>, the simplified formula is:</p>
+    <div class="math-display">
+\[
+\text{value} = (-1)^{\text{sign}} \times 2^{(\text{exponent} - \text{bias})} \times 1.\text{mantissa}
+\]
+    </div>
+    <p>This formula does not cover zero, subnormal values, infinities, or NaNs. Those are handled by special exponent patterns.</p>
+
+    <p>Let's decode this FP32 bit pattern: <code>0 | 10000001 | 10100000000000000000000</code></p>
+    <ul>
+      <li><strong>Sign:</strong> <code>(-1)^0 = +1 → positive</code></li>
+      <li><strong>Exponent</strong>
+        <ul>
+          <li><code>10000001</code> in binary = 129 in decimal</li>
+          <li>bias for FP32 = 127</li>
+          <li>exponent = 2<sup>(129-127)</sup> = 4</li>
+        </ul>
+      </li>
+      <li><strong>Mantissa:</strong><br>The stored bits are <code>10100000000000000000000</code>. You read them as binary fraction digits after an implied <code>1.</code>:</li>
+    </ul>
+
+<pre class="code code-wrap language-plaintext"><code class="language-plaintext">1.10100000000000000000000
+  ↑↑
+  bit1 = 1 → contributes 1 × 2^(-1) = 0.5
+  bit2 = 0 → contributes 0 × 2^(-2) = 0
+  bit3 = 1 → contributes 1 × 2^(-3) = 0.125
+  rest are 0
+
+1 + 0.5 + 0 + 0.125 = 1.625</code></pre>
+
+    <ul>
+      <li><strong>Multiply everything:</strong> <code>(+1) × 4 × 1.625 = 6.5 ✓</code></li>
+    </ul>
+
+    <h2>How to represent a number in FP32</h2>
+    <p>To represent the number <strong>-6.5</strong>:</p>
+    <ul>
+      <li><strong>sign:</strong> negative → sign bit = <code>1</code></li>
+      <li><strong>write 6.5 in binary:</strong> <code>6.5 = 110.1</code> in binary</li>
+      <li><strong>normalize it</strong> (like scientific notation, shift until one digit before the decimal): <code>110.1 → 1.101 × 2^2</code></li>
+      <li><strong>store the exponent</strong><br>FP32 uses a <strong>bias of 127</strong>, so you store <code>2 + 127 = 129 = 10000001</code> in the exponent field. The bias exists so you can represent negative exponents without a separate sign bit for the exponent.</li>
+      <li><strong>store the mantissa:</strong><br>The leading <code>1.</code> is always implied for normalized values, so you only store what comes after the dot: <code>101</code> followed by zeros to fill 23 bits: <code>10100000000000000000000</code></li>
+      <li><strong>Final stored bits:</strong> <code>1</code><mark class="highlight-pink_background"><code>|</code></mark><code>10000001</code><code>|</code><code>10100000000000000000000</code></li>
+    </ul>
+
+    <h2>What FP8 actually is</h2>
+    <p>Before talking about FP8, make the convention explicit.</p>
+    <p>In this note, <strong>E4M3</strong> and <strong>E5M2</strong> first mean the bit allocation:</p>
+    <ul>
+      <li><strong>E4M3</strong> — 1 sign bit, 4 exponent bits, 3 mantissa bits</li>
+      <li><strong>E5M2</strong> — 1 sign bit, 5 exponent bits, 2 mantissa bits</li>
+    </ul>
+    <p><mark class="highlight-pink_background"><strong>That bit allocation alone is not the whole FP8 dtype definition.</strong></mark> Once the bit widths are fixed, the exact set of representable FP8 numbers still depends on:</p>
+    <ul>
+      <li><strong>exponent bias</strong>: shifts the exponent window and changes max/min range</li>
+      <li><strong>reserved special patterns</strong>: whether top exponent/mantissa codes mean finite numbers, NaN, or infinity</li>
+      <li><strong>zero/subnormal rules</strong>: whether negative zero exists, and how tiny values near zero are encoded</li>
+      <li><strong>rounding and overflow policy</strong>: how real values are converted into FP8 storage</li>
+    </ul>
+    <p>These rules define the FP8 number itself. They are different from the external quantization scale used later when we map FP16/BF16 tensors into FP8 cache storage.</p>
+    <p>So <strong>E4M3 is a family name unless we specify the exact dtype/standard</strong>.</p>
+
+    <p>Examples:</p>
+    <ul>
+      <li><strong>OCP / ONNX <code>E4M3FN</code> / NVIDIA Transformer Engine E4M3</strong>: finite-only E4M3, usually max finite value around <strong>±448</strong>.</li>
+      <li><strong>ONNX <code>E4M3FNUZ</code>-style variants</strong>: finite-only, no negative zero, different bias, max finite value around <strong>±240</strong>.</li>
+      <li><strong>E5M2</strong>: larger exponent range, max finite value around <strong>±57344</strong>, but only 2 mantissa bits.</li>
+    </ul>
+
+    <p>For KV cache, <strong>E4M3 is commonly used when calibrated quantization scales are available</strong>, because it keeps one extra mantissa bit compared with E5M2. That extra precision usually matters more for attention quality than the extra range from E5M2.</p>
+    <p>For this note, when I explain the bit layout, I am describing generic E4M3/E5M2 ideas. When I mention vLLM/SGLang KV cache behavior, I am describing those backends' documented FP8 KV cache implementation, not redefining the FP8 standard.</p>
+
+    <h2>Now feel the effect of fewer mantissa bits</h2>
+    <p>Say you have a value <code>1.0011011</code> in binary and you need to store it in:</p>
+    <ul>
+      <li><strong>FP32</strong> (23 mantissa bits) → stores <code>00110110000000000000000</code> → nearly exact</li>
+      <li><strong>FP8 E4M3</strong> (3 mantissa bits) → can only keep 3 mantissa bits, so it must round to the nearest representable FP8 value</li>
+    </ul>
+
+<pre class="code code-wrap language-plaintext"><code class="language-plaintext">original:       1.0011011
+nearby FP8s:    1.001 or 1.010
+stored result:  whichever is chosen by the rounding rule</code></pre>
+
+    <p>This is your quantization error. The value is not just “cut off”; in real implementations it is usually rounded to a nearby representable value, and it may also be saturated/clipped if it exceeds the FP8 range.</p>
+
+    <h2>What each field actually controls</h2>
+    <ul>
+      <li><strong>Exponent bits → range</strong><br>More exponent bits usually mean a larger exponent window, but the final range also depends on bias and special-value rules.</li>
+    </ul>
+
+<pre class="code code-wrap language-plaintext"><code class="language-plaintext">FP32: exponent = 8 bits → range up to ~3.4 × 10^38
+FP8 E4M3FN / OCP / NVIDIA Transformer Engine style → max around ±448
+FP8 E4M3FNUZ-style variants → max around ±240
+FP8 E5M2 → max around ±57344</code></pre>
+
+    <p>If your value exceeds the representable range → <strong>overflow / saturation / special value</strong>, depending on the exact format and conversion rule.</p>
+    <ul>
+      <li><strong>Mantissa bits → precision</strong><br>More mantissa bits = more significant digits, finer resolution between two consecutive representable numbers.</li>
+    </ul>
+
+<pre class="code code-wrap language-plaintext"><code class="language-plaintext">FP32:     23 mantissa bits → ~7 decimal digits of precision
+FP16:     10 mantissa bits → ~3 decimal digits of precision
+FP8 E4M3: 3 mantissa bits  → much coarser precision</code></pre>
+
+    <p>If your value falls between two representable numbers → <strong>rounding error</strong>.</p>
+
+    <h1>The tricky part: quantization scheme</h1>
+    <p>You can't just naively cast FP16 → FP8. Here we introduce a second, different meaning of “scale”: the <strong>external quantization scale</strong>.</p>
+    <p>There are two scales in the full story:</p>
+    <ul>
+      <li><strong>internal exponent scale</strong>: inside every FP8 value, from <code>2^(exponent - bias)</code></li>
+      <li><strong>external quantization scale</strong>: metadata used to map FP16/BF16 tensor values into FP8 cache storage</li>
+    </ul>
+
+    <p>The diagram below shows the <strong>unfused conceptual pipeline</strong> first, so the data movement is explicit.</p>
+    <figure>
+      <img src="/assets/fp8-kv-cache/kv-quant-dequant-flow.svg?v=3cd4c35" alt="FP8 KV cache quantization and dequantization flow showing quant scale metadata and FP8 dtype rules">
+      <figcaption>The unfused conceptual pipeline: quant scale maps tensor range, while FP8 dtype rules encode and decode each stored byte.</figcaption>
+    </figure>
+
+    <aside class="callout">
+      <p><strong>Important</strong></p>
+      <p>This <strong>quantization scale</strong> is <strong>not a new FP8 standard</strong>. The FP8 dtype/standard defines how one 8-bit code maps to one FP8 number. A KV-cache quantization scheme stores FP8 bytes plus scale metadata, and uses that metadata when writing/reading the KV cache.</p>
+    </aside>
+
+    <ul>
+      <li>So vLLM/SGLang are not redefining the FP8 bit format by adding scale. They are using a backend FP8 dtype and wrapping it in a KV-cache quantization scheme.</li>
+      <li>Conceptually, scale granularity can be <strong>per-tensor</strong>, <strong>per-channel/head</strong>, <strong>per-token</strong>, or <strong>per-block</strong>. Finer granularity usually gives better accuracy but adds metadata and implementation overhead.</li>
+      <li>For the current FP8 KV cache implementations discussed in vLLM/SGLang docs, the practical note is stricter: <strong>they currently document per-tensor scalar scaling for FP8 KV cache</strong>, with finer-grained scaling still a design/development direction rather than the default behavior.</li>
+    </ul>
+
+    <h2>Why this matters for FP8 KV cache</h2>
+    <p>With only 3 mantissa bits, consecutive representable values are far apart. Around <code>1.x</code>, E4M3 spacing is binary, not decimal-style:</p>
+
+<pre class="code code-wrap language-plaintext"><code class="language-plaintext">possible E4M3-like normalized values near 1:
+1.000, 1.001, 1.010, 1.011, ...</code></pre>
+
+    <p>So when you store a K or V vector value in FP8, it gets rounded to a nearby representable value. <mark class="highlight-pink_background"><strong>The external quantization scale tries to stretch the tensor values so that the available FP8 range is used efficiently</strong></mark>, reducing both clipping and excessive rounding error.</p>
+
+    <h2>Where the approximation error shows up</h2>
+    <p>KV cache quantization is <strong>lossy</strong>. The concern is:</p>
+    <ul>
+      <li>K vectors get slightly distorted → attention score distribution shifts</li>
+      <li>V vectors get slightly distorted → the values mixed by attention change</li>
+      <li>Errors accumulate over many layers and long contexts → output quality can degrade</li>
+    </ul>
+    <p>In practice, FP8 E4M3 KV cache often introduces only small accuracy degradation when the backend, scaling factors, and model are suitable.</p>
+    <p>But this is not automatic:</p>
+    <ul>
+      <li>calibrated scales are better than blindly using scale <code>1.0</code></li>
+      <li>backend support matters because unfused dequantization can be slow</li>
+      <li>the impact depends on model architecture, sequence length, and quantization format</li>
+    </ul>
+
+    <h1>The tradeoff summary</h1>
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>FP16/BF16 KV</th>
+          <th>FP8 KV</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Memory per value</td>
+          <td>2 bytes</td>
+          <td>1 byte, plus scale metadata</td>
+        </tr>
+        <tr>
+          <td>Cache capacity</td>
+          <td>baseline</td>
+          <td>roughly larger, often close to 2× before overhead</td>
+        </tr>
+        <tr>
+          <td>Batch size / concurrency</td>
+          <td>smaller when KV memory is the bottleneck</td>
+          <td>larger when KV memory is the bottleneck</td>
+        </tr>
+        <tr>
+          <td>Precision</td>
+          <td>higher-precision baseline</td>
+          <td>lossy quantized approximation</td>
+        </tr>
+        <tr>
+          <td>Compute on read</td>
+          <td>none</td>
+          <td>dequantize/rescale on read; some backends may fuse this into attention</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <ul>
+      <li>The main benefit is memory: you can store more cached tokens, support longer contexts, or handle more concurrent requests.</li>
+      <li>The throughput win is strongest when KV memory capacity is the bottleneck and the backend handles dequantization efficiently.</li>
+      <li>If dequantization is not fused with attention, or if the workload is not KV-memory-bound, the speedup may be smaller or even disappear.</li>
+    </ul>
+  </div>
+</article>
+
+</article>
+
+		</main>
+
+
+		<style>
+			html body {
+				max-width: none !important;
+				margin: 0 !important;
+				padding: 0 24px !important;
+				color: var(--text) !important;
+				background: var(--bg) !important;
+				white-space: normal !important;
+			}
+
+			.site-header,
+			.container,
+			.site-footer {
+				max-width: 1120px !important;
+				margin-left: auto !important;
+				margin-right: auto !important;
+			}
+
+			.site-header {
+				background: var(--header-bg) !important;
+				box-shadow: 0 0 0 100vmax var(--header-bg) !important;
+				clip-path: inset(0 -100vmax) !important;
+			}
+
+			.site-header a,
+			.site-nav a,
+			.site-footer a {
+				text-decoration: none !important;
+			}
+
+			.post {
+				max-width: 1040px !important;
+				padding: 34px 40px 46px !important;
+				border: 1px solid var(--github-border) !important;
+				border-radius: 6px !important;
+				background: var(--surface) !important;
+				color: var(--github-text) !important;
+			}
+
+			.post-header {
+				margin-bottom: 2.25rem !important;
+				text-align: left !important;
+			}
+
+			.post-title {
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 2rem !important;
+				font-weight: 600 !important;
+				line-height: 1.2 !important;
+			}
+
+			.post .page,
+			.post .page-body {
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 16px !important;
+				line-height: 1.65 !important;
+				text-align: left !important;
+				white-space: normal !important;
+			}
+
+			.post .page-body {
+				counter-reset: section;
+			}
+
+			.post .page p,
+			.post .page li,
+			.post .page .collection-content,
+			.post .page .simple-table,
+			.post .page .table_of_contents-item,
+			.post .page .bookmark-title,
+			.post .page .bookmark-description,
+			.post .page .bookmark-href {
+				color: var(--github-text) !important;
+				font-size: 1rem !important;
+				line-height: 1.65 !important;
+			}
+
+
+			.language-switch {
+				display: inline-flex !important;
+				gap: 4px !important;
+				margin-top: 1rem !important;
+				padding: 3px !important;
+				border: 1px solid var(--github-border) !important;
+				border-radius: 999px !important;
+				background: var(--github-bg) !important;
+				font-family: var(--sans) !important;
+			}
+
+			.language-option {
+				display: inline-flex !important;
+				align-items: center !important;
+				min-height: 30px !important;
+				padding: 0.25rem 0.8rem !important;
+				border-radius: 999px !important;
+				color: var(--github-muted) !important;
+				font-size: 0.78rem !important;
+				font-weight: 700 !important;
+				letter-spacing: 0.04em !important;
+				line-height: 1 !important;
+				text-decoration: none !important;
+			}
+
+			.language-option:hover {
+				color: var(--github-text) !important;
+				text-decoration: none !important;
+			}
+
+			.language-option.is-active {
+				background: var(--surface) !important;
+				color: var(--github-text) !important;
+				box-shadow: 0 1px 2px rgba(31, 35, 40, 0.08) !important;
+			}
+
+			.language-option.is-disabled {
+				color: #8c959f !important;
+				cursor: not-allowed !important;
+			}
+
+
+			.translation-note {
+				margin: 1.5rem 0 0 !important;
+				padding: 1.1rem 1.25rem !important;
+				border: 1px solid var(--github-border) !important;
+				border-left: 4px solid #0969da !important;
+				border-radius: 6px !important;
+				background: var(--github-bg) !important;
+			}
+
+			.translation-note .eyebrow {
+				margin-bottom: 0.55rem !important;
+				color: var(--github-muted) !important;
+				font-size: 0.78rem !important;
+				font-weight: 700 !important;
+				letter-spacing: 0.08em !important;
+				text-transform: uppercase !important;
+			}
+
+			.translation-note p:last-child {
+				margin-bottom: 0 !important;
+			}
+
+			.post .page h1 {
+				counter-increment: section;
+				counter-reset: subsection;
+				margin: 2rem 0 1rem !important;
+				padding-bottom: 0.35rem !important;
+				border-bottom: 1px solid var(--github-border) !important;
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 1.55rem !important;
+				font-weight: 600 !important;
+				line-height: 1.3 !important;
+			}
+
+			.post .page h1::before {
+				content: counter(section) ". ";
+				color: var(--github-muted);
+			}
+
+			.post .page h2 {
+				counter-increment: subsection;
+				counter-reset: subsubsection;
+				margin: 1.6rem 0 0.8rem !important;
+				padding-bottom: 0.25rem !important;
+				border-bottom: 1px solid var(--github-border) !important;
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 1.25rem !important;
+				font-weight: 600 !important;
+				line-height: 1.35 !important;
+			}
+
+			.post .page h2::before {
+				content: counter(section) "." counter(subsection) " ";
+				color: var(--github-muted);
+			}
+
+			.post .page h3 {
+				counter-increment: subsubsection;
+				margin: 1.35rem 0 0.65rem !important;
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 1.1rem !important;
+				font-weight: 600 !important;
+				line-height: 1.35 !important;
+			}
+
+			.post .page h3::before {
+				content: counter(section) "." counter(subsection) "." counter(subsubsection) " ";
+				color: var(--github-muted);
+			}
+
+			.post .page :not(pre) > code {
+				padding: 0.2em 0.4em !important;
+				border-radius: 6px !important;
+				background: rgba(175, 184, 193, 0.2) !important;
+				color: black !important;
+			}
+
+			.post .page pre.code,
+			.post .page pre.code.code-wrap {
+				overflow-x: auto !important;
+				padding: 1.25em 1em !important;
+				border: 1px solid var(--github-border) !important;
+				border-radius: 6px !important;
+				background: var(--github-bg) !important;
+				white-space: pre !important;
+				word-break: normal !important;
+			}
+
+			.post .page pre.code code {
+				color: #37352f !important;
+				white-space: pre !important;
+				word-break: normal !important;
+			}
+
+			.post .page table {
+				width: 100% !important;
+				border-collapse: collapse !important;
+			}
+
+			.post .page th,
+			.post .page td {
+				border: 1px solid var(--github-border) !important;
+				padding: 0.45rem 0.65rem !important;
+			}
+
+			.post .page th {
+				background: var(--github-bg) !important;
+				font-weight: 600 !important;
+			}
+
+			.post .page a {
+				color: #0969da !important;
+			}
+
+			.post .page a:hover {
+				text-decoration: underline !important;
+			}
+
+			.post .page .highlight-gray_background {
+				background: rgba(42, 28, 0, 0.07) !important;
+			}
+
+			.post .page .highlight-brown_background {
+				background: rgba(139, 46, 0, 0.086) !important;
+			}
+
+			.post .page .highlight-orange_background {
+				background: rgba(224, 101, 1, 0.129) !important;
+			}
+
+			.post .page .highlight-yellow_background {
+				background: rgba(211, 168, 0, 0.137) !important;
+			}
+
+			.post .page .highlight-teal_background {
+				background: rgba(0, 100, 45, 0.09) !important;
+			}
+
+			.post .page .highlight-blue_background {
+				background: rgba(0, 124, 215, 0.094) !important;
+			}
+
+			.post .page .highlight-purple_background {
+				background: rgba(102, 0, 178, 0.078) !important;
+			}
+
+			.post .page .highlight-pink_background {
+				background: rgba(197, 0, 93, 0.086) !important;
+			}
+
+			.post .page .highlight-red_background {
+				background: rgba(223, 22, 0, 0.094) !important;
+			}
+
+			.post .page .callout {
+				display: flex !important;
+				gap: 0.75rem !important;
+				margin: 1rem 0 !important;
+				padding: 0.8rem 1rem !important;
+				border: 1px solid var(--github-border) !important;
+				border-left: 4px solid #0969da !important;
+				border-radius: 6px !important;
+				background: var(--github-bg) !important;
+				white-space: normal !important;
+			}
+
+			.post .page figure {
+				margin: 1.4rem 0 !important;
+			}
+
+			.post .page .notion-text-equation-token .katex {
+				font-size: 1.12em !important;
+			}
+
+			.post .page .katex-display,
+			.post .page figure.equation .katex {
+				font-size: 1.18em !important;
+			}
+
+			.post .page .equation {
+				overflow-x: auto !important;
+				padding: 0.75rem 0 !important;
+			}
+
+			@media only screen and (max-width: 720px) {
+				.post {
+					padding: 24px 18px 34px !important;
+				}
+			}
+		</style>
+
+		<footer class="site-footer">
+			<a href="mailto:sharynhu826@gmail.com">sharynhu826@gmail.com</a>
+			<a href="https://github.com/SharynHu">github.com/SharynHu</a>
+		</footer>
+	</body>
+</html>

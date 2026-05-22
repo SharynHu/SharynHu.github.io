@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="420" viewBox="0 0 1500 420" role="img" aria-labelledby="title desc">
+  <title id="title">Floating point representation fields</title>
+  <desc id="desc">An eight-bit floating point layout showing one sign bit, three exponent bits, and four mantissa bits.</desc>
+  <defs>
+    <filter id="soft-shadow" x="-10%" y="-20%" width="120%" height="160%">
+      <feDropShadow dx="0" dy="7" stdDeviation="8" flood-color="#102030" flood-opacity="0.10"/>
+    </filter>
+    <style>
+      text {
+        font-family: "Comic Sans MS", "Chalkboard SE", "Bradley Hand", "Segoe Print", cursive;
+        fill: #050505;
+      }
+      .bit {
+        font-size: 58px;
+        font-weight: 500;
+      }
+      .label {
+        font-size: 48px;
+        font-weight: 500;
+      }
+    </style>
+  </defs>
+
+  <rect width="1500" height="420" fill="#ffffff"/>
+
+  <g filter="url(#soft-shadow)">
+    <path d="M84 50 C98 35 119 44 128 56 C145 30 177 38 184 60 C196 49 220 52 230 71 L228 164 C211 172 195 164 185 153 C176 177 142 176 130 156 C112 176 84 166 79 145 C61 147 57 121 71 111 C55 95 62 65 84 50 Z" fill="#ffc9c9" opacity="0.92"/>
+    <path d="M246 49 C310 34 395 41 456 43 C529 45 586 31 646 48 C664 53 668 75 653 88 C667 103 662 134 638 143 C556 158 456 161 357 156 C306 153 257 160 224 142 C205 131 211 104 228 93 C211 75 221 55 246 49 Z" fill="#cfe3ff" opacity="0.92"/>
+    <path d="M676 48 C790 41 906 38 1014 49 C1124 61 1235 34 1312 43 C1337 45 1344 71 1328 85 C1351 101 1343 134 1315 143 C1220 165 1111 151 1017 153 C901 156 783 163 682 148 C655 144 649 113 669 99 C646 82 651 55 676 48 Z" fill="#fffbd5" opacity="0.95"/>
+  </g>
+
+  <g stroke="#050505" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="76" y="42" width="132" height="126" fill="none"/>
+    <rect x="208" y="42" width="162" height="126" fill="none"/>
+    <rect x="370" y="42" width="142" height="126" fill="none"/>
+    <rect x="512" y="42" width="142" height="126" fill="none"/>
+    <rect x="654" y="42" width="152" height="126" fill="none"/>
+    <rect x="806" y="42" width="142" height="126" fill="none"/>
+    <rect x="948" y="42" width="166" height="126" fill="none"/>
+    <rect x="1114" y="42" width="206" height="126" fill="none"/>
+  </g>
+
+  <text x="142" y="128" text-anchor="middle" class="bit">0</text>
+  <text x="289" y="128" text-anchor="middle" class="bit">1</text>
+  <text x="441" y="128" text-anchor="middle" class="bit">0</text>
+  <text x="583" y="128" text-anchor="middle" class="bit">1</text>
+  <text x="730" y="128" text-anchor="middle" class="bit">1</text>
+  <text x="877" y="128" text-anchor="middle" class="bit">1</text>
+  <text x="1031" y="128" text-anchor="middle" class="bit">0</text>
+  <text x="1217" y="128" text-anchor="middle" class="bit">1</text>
+
+  <g fill="none" stroke="#050505" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M68 205 C86 215 103 214 123 222 C135 205 151 203 165 215 C178 226 195 216 205 201"/>
+    <path d="M232 194 C261 220 314 216 362 193 C401 174 428 178 431 203 C452 193 470 205 505 204 C551 205 590 205 637 181"/>
+    <path d="M684 191 C718 226 785 211 834 197 C879 184 905 194 925 217 C940 198 981 212 1031 216 C1130 224 1204 239 1288 199"/>
+  </g>
+
+  <text x="116" y="300" text-anchor="middle" class="label">sign</text>
+  <text x="463" y="298" text-anchor="middle" class="label">exponent</text>
+  <text x="1086" y="298" text-anchor="middle" class="label">mantissa</text>
+</svg>
