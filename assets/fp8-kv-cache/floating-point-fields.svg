@@ -1,58 +1,61 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340" role="img" aria-labelledby="title desc">
-  <title id="title">Floating point bit layout</title>
-  <desc id="desc">A floating point number is split into three fields: sign bit, exponent bits, and mantissa bits.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="420" viewBox="0 0 1500 420" role="img" aria-labelledby="title desc">
+  <title id="title">Floating point representation fields</title>
+  <desc id="desc">An eight-bit floating point layout showing one sign bit, three exponent bits, and four mantissa bits.</desc>
   <defs>
-    <filter id="shadow" x="-10%" y="-20%" width="120%" height="150%">
-      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#102030" flood-opacity="0.12"/>
+    <filter id="soft-shadow" x="-10%" y="-20%" width="120%" height="160%">
+      <feDropShadow dx="0" dy="7" stdDeviation="8" flood-color="#102030" flood-opacity="0.10"/>
     </filter>
-    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
-    </marker>
-    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#d97706"/>
-    </marker>
-    <marker id="arrow-rose" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#e11d48"/>
-    </marker>
+    <style>
+      text {
+        font-family: "Comic Sans MS", "Chalkboard SE", "Bradley Hand", "Segoe Print", cursive;
+        fill: #050505;
+      }
+      .bit {
+        font-size: 64px;
+        font-weight: 700;
+      }
+      .label {
+        font-size: 54px;
+        font-weight: 700;
+      }
+    </style>
   </defs>
 
-  <rect x="24" y="24" width="1152" height="292" rx="28" fill="#fbfaf8"/>
-  <text x="70" y="76" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="28" font-weight="700" fill="#20242a">Floating-point binary layout</text>
-  <text x="70" y="112" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18" fill="#65717f">Each stored value is decoded from sign, exponent, and mantissa fields.</text>
+  <rect width="1500" height="420" fill="#ffffff"/>
 
-  <g filter="url(#shadow)">
-    <rect x="80" y="145" width="140" height="92" rx="14" fill="#ffe4e6" stroke="#fb7185" stroke-width="2"/>
-    <rect x="220" y="145" width="330" height="92" rx="0" fill="#dbeafe" stroke="#60a5fa" stroke-width="2"/>
-    <rect x="550" y="145" width="570" height="92" rx="14" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
-    <line x1="220" y1="145" x2="220" y2="237" stroke="#ffffff" stroke-width="4"/>
-    <line x1="550" y1="145" x2="550" y2="237" stroke="#ffffff" stroke-width="4"/>
+  <g filter="url(#soft-shadow)">
+    <path d="M84 50 C98 35 119 44 128 56 C145 30 177 38 184 60 C196 49 220 52 230 71 L228 164 C211 172 195 164 185 153 C176 177 142 176 130 156 C112 176 84 166 79 145 C61 147 57 121 71 111 C55 95 62 65 84 50 Z" fill="#ffc9c9" opacity="0.92"/>
+    <path d="M246 49 C310 34 395 41 456 43 C529 45 586 31 646 48 C664 53 668 75 653 88 C667 103 662 134 638 143 C556 158 456 161 357 156 C306 153 257 160 224 142 C205 131 211 104 228 93 C211 75 221 55 246 49 Z" fill="#cfe3ff" opacity="0.92"/>
+    <path d="M676 48 C790 41 906 38 1014 49 C1124 61 1235 34 1312 43 C1337 45 1344 71 1328 85 C1351 101 1343 134 1315 143 C1220 165 1111 151 1017 153 C901 156 783 163 682 148 C655 144 649 113 669 99 C646 82 651 55 676 48 Z" fill="#fffbd5" opacity="0.95"/>
   </g>
 
-  <text x="150" y="184" text-anchor="middle" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="25" font-weight="800" fill="#9f1239">sign</text>
-  <text x="150" y="212" text-anchor="middle" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="16" font-weight="600" fill="#be123c">+ / -</text>
-
-  <text x="385" y="184" text-anchor="middle" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="25" font-weight="800" fill="#1d4ed8">exponent</text>
-  <text x="385" y="212" text-anchor="middle" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="16" font-weight="600" fill="#2563eb">scale / range</text>
-
-  <text x="835" y="184" text-anchor="middle" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="25" font-weight="800" fill="#92400e">mantissa</text>
-  <text x="835" y="212" text-anchor="middle" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="16" font-weight="600" fill="#b45309">digits / precision</text>
-
-  <g opacity="0.7">
-    <rect x="102" y="157" width="18" height="18" rx="4" fill="#fb7185"/>
-    <rect x="242" y="157" width="18" height="18" rx="4" fill="#60a5fa"/>
-    <rect x="272" y="157" width="18" height="18" rx="4" fill="#93c5fd"/>
-    <rect x="302" y="157" width="18" height="18" rx="4" fill="#60a5fa"/>
-    <rect x="572" y="157" width="18" height="18" rx="4" fill="#fbbf24"/>
-    <rect x="602" y="157" width="18" height="18" rx="4" fill="#f59e0b"/>
-    <rect x="632" y="157" width="18" height="18" rx="4" fill="#fbbf24"/>
-    <rect x="662" y="157" width="18" height="18" rx="4" fill="#f59e0b"/>
+  <g stroke="#050505" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="76" y="42" width="132" height="126" fill="none"/>
+    <rect x="208" y="42" width="162" height="126" fill="none"/>
+    <rect x="370" y="42" width="142" height="126" fill="none"/>
+    <rect x="512" y="42" width="142" height="126" fill="none"/>
+    <rect x="654" y="42" width="152" height="126" fill="none"/>
+    <rect x="806" y="42" width="142" height="126" fill="none"/>
+    <rect x="948" y="42" width="166" height="126" fill="none"/>
+    <rect x="1114" y="42" width="206" height="126" fill="none"/>
   </g>
 
-  <path d="M 150 248 L 150 279" stroke="#e11d48" stroke-width="3" marker-end="url(#arrow-rose)"/>
-  <path d="M 385 248 L 385 279" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow-blue)"/>
-  <path d="M 835 248 L 835 279" stroke="#d97706" stroke-width="3" marker-end="url(#arrow-amber)"/>
+  <text x="142" y="128" text-anchor="middle" class="bit">0</text>
+  <text x="289" y="128" text-anchor="middle" class="bit">1</text>
+  <text x="441" y="128" text-anchor="middle" class="bit">0</text>
+  <text x="583" y="128" text-anchor="middle" class="bit">1</text>
+  <text x="730" y="128" text-anchor="middle" class="bit">1</text>
+  <text x="877" y="128" text-anchor="middle" class="bit">1</text>
+  <text x="1031" y="128" text-anchor="middle" class="bit">0</text>
+  <text x="1217" y="128" text-anchor="middle" class="bit">1</text>
 
-  <text x="150" y="304" text-anchor="middle" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="16" font-weight="650" fill="#9f1239">one bit</text>
-  <text x="385" y="304" text-anchor="middle" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="16" font-weight="650" fill="#1d4ed8">controls magnitude</text>
-  <text x="835" y="304" text-anchor="middle" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="16" font-weight="650" fill="#92400e">controls resolution</text>
+  <g fill="none" stroke="#050505" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M68 205 C86 215 103 214 123 222 C135 205 151 203 165 215 C178 226 195 216 205 201"/>
+    <path d="M232 194 C261 220 314 216 362 193 C401 174 428 178 431 203 C452 193 470 205 505 204 C551 205 590 205 637 181"/>
+    <path d="M684 191 C718 226 785 211 834 197 C879 184 905 194 925 217 C940 198 981 212 1031 216 C1130 224 1204 239 1288 199"/>
+  </g>
+
+  <text x="116" y="300" text-anchor="middle" class="label">sign</text>
+  <text x="463" y="298" text-anchor="middle" class="label">exponent</text>
+  <text x="1086" y="298" text-anchor="middle" class="label">mantissa</text>
 </svg>
