@@ -1,0 +1,370 @@
+---
+layout: post
+title: "Tensor Parallelism"
+date: 2026-05-25
+lang: zh
+lang_ref: tensor-parallelism
+---
+<article class="page sans" id="tensor-parallelism">
+  <div class="page-body">
+    <h1>它要解决的问题</h1>
+    <p>大模型的 weight matrices 往往放不进单张 GPU 的 HBM。即使勉强放得下，单张 GPU 的 compute 也可能成为 throughput bottleneck。Tensor parallelism 会把单个 <strong>weight matrix</strong> 切到多张 GPU 上，让 matrix multiplication 可以并行计算。</p>
+    <p>Attention score computation 本身，也就是 <code>softmax(QKᵀ/√d) @ V</code>，并不是被 tensor parallelism 切开的。它会在每张 GPU 上针对这张 GPU 分到的 heads 完整、本地地执行。</p>
+    <p>这篇文章里默认使用 4-way tensor parallelism，也就是 <code>TP=4</code>。Forward pass 会在两种状态之间交替：</p>
+    <ul>
+      <li><strong>Replicated state</strong>：每张 GPU 都持有相同的 <code>x: [batch, seq_len, d_model]</code>。RMSNorm、residual add 这类较轻的本地操作不需要通信。</li>
+      <li><strong>Sharded state</strong>：每张 GPU 持有某个 intermediate 的不同 slice。昂贵的 matmul 并行执行，最后通过 AllReduce 把输出恢复成 replicated state。</li>
+    </ul>
+
+    <h1>术语</h1>
+    <p>为了后文表述清楚，这里先统一几个术语：</p>
+    <ul>
+      <li><strong>Transformer layer</strong> — 堆叠 N 次的完整重复单元，里面包含两个 sublayers。</li>
+      <li><strong>Attention sublayer</strong> — 一个 Transformer layer 的前半部分：RMSNorm + attention mechanism + residual add。</li>
+      <li><strong>Attention mechanism</strong> — Q/K/V projections + score computation + output projection。不包含 norm，也不包含 residual。</li>
+      <li><strong>FFN sublayer</strong> — 一个 Transformer layer 的后半部分：RMSNorm + SwiGLU FFN + residual add。</li>
+      <li><strong>SwiGLU FFN</strong> — 三个 weight matrices 加 activation。不包含 norm，也不包含 residual。</li>
+    </ul>
+
+    <h1>Attention Sublayer：一步步看</h1>
+    <p>Attention sublayer 包含：<strong>RMSNorm → attention mechanism → residual add</strong>。</p>
+    <p>现代 Transformer 通常使用 <strong>GQA (Grouped Query Attention)</strong>：</p>
+    <ul>
+      <li><code>num_heads</code> 个 query heads</li>
+      <li><code>num_kv_heads</code> 个 key/value heads，并且 <code>num_kv_heads &lt; num_heads</code></li>
+    </ul>
+    <p>例如，Qwen2.5-7B 使用 <code>num_heads=28</code> 和 <code>num_kv_heads=4</code>。</p>
+
+    <aside class="callout">
+      <div class="callout-icon">👉</div>
+      <div>
+        <p><strong>TP 下的 GQA 约束</strong></p>
+        <p>很多实现要求 TP 能干净地整除 attention-head 和 KV-head 的布局。</p>
+        <ul>
+          <li>如果 <code>TP ≤ num_kv_heads</code> 且 <code>num_kv_heads % TP == 0</code>，每个 rank 可以拿到 <code>num_kv_heads / TP</code> 个不同的 KV heads。</li>
+          <li>如果 <code>TP &gt; num_kv_heads</code>，KV heads 可能需要 replication 或特殊 grouping，具体取决于 backend。有些系统会直接限制这类 TP 配置，而不是支持所有 layout。</li>
+        </ul>
+      </div>
+    </aside>
+
+    <p>在 <code>TP=4</code> 时，heads 会这样分到不同 GPU 上：</p>
+    <ul>
+      <li>GPU 0: Q heads 0-6, KV head 0</li>
+      <li>GPU 1: Q heads 7-13, KV head 1</li>
+      <li>GPU 2: Q heads 14-20, KV head 2</li>
+      <li>GPU 3: Q heads 21-27, KV head 3</li>
+    </ul>
+
+    <h2>RMSNorm (pre-attention)</h2>
+    <p><strong>RMSNorm 在所有 GPU 上都是 replicated。</strong></p>
+    <p>每个 RMSNorm instance 计算：</p>
+    <div class="math-display">
+\[
+\mathrm{RMS}(x)=\sqrt{\frac{1}{d}\sum_{i=1}^{d} x_i^2 + \epsilon}
+\]
+    </div>
+    <div class="math-display">
+\[
+\mathrm{RMSNorm}(x)=\gamma \odot \frac{x}{\mathrm{RMS}(x)}
+\]
+    </div>
+    <ul>
+      <li>RMSNorm 需要完整的 <strong><code>d_model</code></strong> vector 来计算 RMS，因为它要在所有 <code>d_model</code> 元素上做 reduction。</li>
+      <li><strong>RMSNorm 不做 tensor-parallel sharding。</strong></li>
+      <li><strong>所有 GPU 会同时、独立地执行它，并得到相同结果。</strong> 没有 GPU 需要等待其他 GPU。</li>
+      <li>每个 RMSNorm instance 都有自己的 <code>γ: [d_model]</code>，并且 replicated 在每张 GPU 上。</li>
+    </ul>
+    <p>上一层 AllReduce 之后，除了第 0 层之外，输入矩阵 <code>x</code> 在所有 GPU 上都是完整且相同的：</p>
+    <ul>
+      <li>GPU 0: <code>x: [batch, seq_len, d_model]</code> ← 完整、相同的 copy</li>
+      <li>GPU 1: <code>x: [batch, seq_len, d_model]</code> ← 完整、相同的 copy</li>
+      <li>GPU 2: <code>x: [batch, seq_len, d_model]</code> ← 完整、相同的 copy</li>
+      <li>GPU 3: <code>x: [batch, seq_len, d_model]</code> ← 完整、相同的 copy</li>
+    </ul>
+    <p>四张 GPU 都会本地、同时执行 <code>RMSNorm(x)</code>。它们得到相同结果，不需要通信。</p>
+
+    <h2>Q, K, V Projections (column-wise split)</h2>
+    <p>回忆一下 Grouped Query Attention 里的 QKV projection：</p>
+    <div class="math-display">
+\[
+W_Q \in \mathbb{R}^{d_{model} \times \text{num\_q\_heads}\times d_{head}}, \quad
+W_K \in \mathbb{R}^{d_{model} \times \text{num\_kv\_heads}\times d_{head}}, \quad
+W_V \in \mathbb{R}^{d_{model} \times \text{num\_kv\_heads}\times d_{head}}
+\]
+    </div>
+    <div class="math-display">
+\[
+Q = XW_Q,\quad K = XW_K,\quad V = XW_V
+\]
+    </div>
+    <p>考虑单个 input vector <code>x</code>，它会和 weight matrix <code>W_Q</code> 的每一列相乘：</p>
+    <div class="math-display">
+\[
+q_j = x \cdot W_Q[:,j]
+\]
+    </div>
+    <p>Projection matrix 的每一列都会产生一个独立的 output feature：这个 scalar 是所有 <code>d_model</code> input elements 的 learned linear combination。</p>
+    <figure class="image">
+      <img src="/assets/tensor-parallelism/tp01.svg" alt="Column-wise projection split across tensor-parallel ranks">
+      <figcaption>每个 output feature 对应一列，所以 output-feature dimension 可以按列切给不同 GPU。</figcaption>
+    </figure>
+    <p>因为 output features 之间相互独立，weight matrix 可以按 column-wise 方式切到多张 GPU 上，而不影响正确性。每张 GPU 只计算自己负责的 output features。</p>
+    <p><strong>每张 GPU 上的 weight shards：</strong></p>
+    <ul>
+      <li><code>Q_proj: [d_model, num_q_heads/4 * d_head]</code></li>
+      <li><code>K_proj: [d_model, num_kv_heads/4 * d_head]</code></li>
+      <li><code>V_proj: [d_model, num_kv_heads/4 * d_head]</code></li>
+    </ul>
+    <p>Projection 之后，每张 GPU 都持有自己那一部分按 heads 切开的 QKV：</p>
+    <ul>
+      <li><code>Q_i = X @ Q_proj_shard_i</code> → <code>[batch, seq_len, (num_q_heads/4) * d_head]</code></li>
+      <li><code>K_i = X @ K_proj_shard_i</code> → <code>[batch, seq_len, (num_kv_heads/4) * d_head]</code></li>
+      <li><code>V_i = X @ V_proj_shard_i</code> → <code>[batch, seq_len, (num_kv_heads/4) * d_head]</code></li>
+    </ul>
+    <figure class="image">
+      <img src="/assets/tensor-parallelism/tp02.svg" alt="QKV heads sharded across four GPUs">
+      <figcaption>Column-parallel QKV projection 之后，每张 GPU 都拥有本地的 Q/K/V heads。</figcaption>
+    </figure>
+    <p>现在进入 sharded state。这里没有通信：每张 GPU 都在同一个 <code>X</code> 上独立工作。</p>
+
+    <h2>Attention Score Computation (fully local)</h2>
+    <p>每张 GPU 都会为自己的 heads 运行完整的 attention math。Attention score computation 不是被 tensor-parallelized 的；它只是因为 heads 相互独立，所以可以在每张 GPU 上本地完成。</p>
+    <p>GPU <code>i</code> reshape：</p>
+    <ul>
+      <li><code>Q_i: [batch, num_q_heads/4, seq_len, d_head]</code></li>
+      <li><code>K_i: [batch, num_kv_heads/4, seq_len, d_head]</code></li>
+      <li><code>V_i: [batch, num_kv_heads/4, seq_len, d_head]</code></li>
+    </ul>
+    <p>GPU <code>i</code> 计算：</p>
+    <ul>
+      <li><code>scores_i = softmax(Q_i @ K_i.T / sqrt(d_head))</code> → <code>[batch, num_q_heads/4, seq, seq]</code></li>
+      <li><code>attn_out_i = scores_i @ V_i</code> → <code>[batch, num_q_heads/4, seq, d_head]</code></li>
+    </ul>
+    <p><mark class="highlight-pink_background">没有通信。GPU <code>i</code> 已经拥有它需要的全部数据。</mark></p>
+
+    <h2>Output Projection (row-wise split)</h2>
+    <p>如果没有 tensor parallelism，所有 heads 的输出会先 concat 起来，再乘以 <code>W_o</code>。</p>
+    <p>在 TP 下，每张 GPU 持有一个 partial concatenation，也就是它自己的 heads' outputs，以及 <code>W_o</code> 对应的 row shard。每张 GPU 会在完整的 <code>d_model</code> output dimension 上产生一个 partial sum。这个 partial sum 本身不完整，所以必须跨 GPU 求和。</p>
+    <ul>
+      <li>GPU <code>i</code> 持有 reshape 后的 <code>attn_out_i</code>：<code>[batch, seq_len, (num_q_heads/4) * d_head]</code></li>
+      <li>GPU <code>i</code> 持有 row shard <code>W_o_shard_i: [(num_heads/4) * d_head, d_model]</code></li>
+    </ul>
+    <p>GPU <code>i</code> 计算：</p>
+    <ul>
+      <li><code>partial_i = attn_out_i @ W_o_shard_i</code> → <code>[batch, seq_len, d_model]</code></li>
+    </ul>
+    <p>虽然 <code>partial_i</code> 的 shape 和最终输出一样，但其中每个元素都只由 <code>attn_out_i</code> 生成，而它只有完整 <code>attn_out</code> 的四分之一。所以下一步需要一个 <code>AllReduce</code> 来恢复完整输出。</p>
+    <figure class="image">
+      <img src="/assets/tensor-parallelism/tp03.svg" alt="Row-wise output projection followed by AllReduce">
+      <figcaption>Row-parallel projection 会产生每个 rank 的 partial sums，随后必须 reduce。</figcaption>
+    </figure>
+
+    <h2>AllReduce #1 + Residual Add</h2>
+    <ul>
+      <li><code>Y_attn = AllReduce(partial_0 + partial_1 + partial_2 + partial_3)</code><br>→ <code>[batch, seq_len, d_model]</code>，完整结果 replicated 到所有 GPU 上。</li>
+      <li><code>x_residual = x_residual + Y_attn</code> → <code>[batch, seq_len, d_model]</code>，replicated。</li>
+    </ul>
+    <p>我们回到 replicated state。Attention sublayer 到这里完成。</p>
+    <aside class="callout">
+      <div class="callout-icon">⚠️</div>
+      <div>
+        <p><strong>Row-parallel projection 下的 bias 处理</strong></p>
+        <p>如果 row-parallel projection，比如这里的 <code>W_o</code> 或后面的 <code>W_down</code>，带有 bias term，那么 bias 必须在 AllReduce <strong>之后</strong>只在一个 rank 上加一次，然后再 replicated。若在 AllReduce 之前把 bias 本地加到 <code>partial_i</code>，这个 bias 会被求和 <code>TP</code> 次。</p>
+        <p>Llama 和 Qwen2.5 的 <code>W_o</code>、<code>W_down</code> 都是 bias-free，所以这个问题在当前大多数部署里是隐藏的。Qwen2.5 在 Q/K/V 上使用 bias，而 Q/K/V 是 column-parallel；这个 bias 会跟着 matrix 一起 sharded 并本地相加，因此不需要额外修正。</p>
+      </div>
+    </aside>
+
+    <h1>FFN Sublayer：一步步看</h1>
+    <p>FFN sublayer 包含：<strong>RMSNorm → SwiGLU FFN → residual add</strong>。</p>
+    <p>Llama、Qwen、Mistral 这类现代 LLM 通常使用 <strong>SwiGLU</strong>，而不是 plain FFN。SwiGLU 有三个 weight matrices：</p>
+    <ul>
+      <li><code>W_gate: [d_model, d_ffn]</code> ← gating branch</li>
+      <li><code>W_up: [d_model, d_ffn]</code> ← value branch</li>
+      <li><code>W_down: [d_ffn, d_model]</code> ← project 回 <code>d_model</code></li>
+      <li><code>output = (SiLU(X @ W_gate) * (X @ W_up)) @ W_down</code></li>
+    </ul>
+    <p>Gate branch 和 up branch 之间的 element-wise multiply 就是 gated activation。标准 FFN 做的是 <code>activation(X @ W1) @ W2</code>；SwiGLU 额外加入一个 learned gate 来过滤 value branch。</p>
+
+    <h2>RMSNorm (pre-FFN)</h2>
+    <p>这里和 attention 前面的 RMSNorm 相同。</p>
+    <ul>
+      <li><code>x_residual: [batch, seq_len, d_model]</code> ← 来自 attention sublayer residual add，replicated。</li>
+      <li>所有 GPU 本地、同时计算：<code>X = RMSNorm(x_residual)</code> → <code>[batch, seq_len, d_model]</code>，replicated。</li>
+    </ul>
+    <p>这仍然是 replicated state。不需要通信。</p>
+
+    <h2>Gate and Up Projections (column-wise split)</h2>
+    <p>逻辑和 Q/K/V 一样：<code>W_gate</code> 和 <code>W_up</code> 的 output features 是独立的，所以 column dimension 可以 sharded。关键点是，GPU <code>i</code> 的 gate shard 和 up shard 覆盖的是 <strong><code>d_ffn</code> 的同一个 slice</strong>，因此它们的 element-wise multiply 是本地且正确的。</p>
+    <p>GPU <code>i</code> 持有 <code>W_gate</code> 和 <code>W_up</code> 的四分之一，按 column sharded：</p>
+    <ul>
+      <li><code>W_gate_shard_i: [d_model, d_ffn/4]</code></li>
+      <li><code>W_up_shard_i: [d_model, d_ffn/4]</code></li>
+    </ul>
+    <p>GPU <code>i</code> 计算：</p>
+    <ul>
+      <li><code>gate_i = SiLU(X @ W_gate_shard_i)</code> → <code>[batch, seq_len, d_ffn/4]</code></li>
+      <li><code>up_i = X @ W_up_shard_i</code> → <code>[batch, seq_len, d_ffn/4]</code></li>
+      <li><code>hidden_i = gate_i * up_i</code> → <code>[batch, seq_len, d_ffn/4]</code>，element-wise 且本地完成。</li>
+    </ul>
+    <p>没有通信。Gate 和 up 覆盖的是同一个 <code>d_ffn</code> slice，因此 multiply 不需要其他 GPU 的数据。</p>
+
+    <h2>Down Projection (row-wise split)</h2>
+    <p><code>hidden_i</code> 的 shape 是 <code>[batch, seq_len, d_ffn/4]</code>。<code>W_down</code> 把 <code>d_ffn → d_model</code>。每张 GPU 持有对应的 row shard。</p>
+    <p>GPU <code>i</code> 持有 <code>W_down</code> 的四分之一，按 row sharded：</p>
+    <ul>
+      <li><code>W_down_shard_i: [d_ffn/4, d_model]</code></li>
+    </ul>
+    <p>GPU <code>i</code> 计算：</p>
+    <ul>
+      <li><code>partial_i = hidden_i @ W_down_shard_i</code> → <code>[batch, seq, d_model]</code>，这是一个 partial sum。</li>
+    </ul>
+
+    <h2>AllReduce #2 + Residual Add</h2>
+    <ul>
+      <li><code>Y_ffn = AllReduce(partial_0 + partial_1 + partial_2 + partial_3)</code><br>→ <code>[batch, seq_len, d_model]</code>，完整结果 replicated 到所有 GPU 上。</li>
+      <li><code>x_residual = x_residual + Y_ffn</code> → <code>[batch, seq_len, d_model]</code>，replicated。</li>
+    </ul>
+    <p>我们又回到 replicated state，可以进入下一个 Transformer layer。</p>
+    <p>每个 Transformer layer：<strong>总共 2 次 AllReduce</strong>。</p>
+    <p>对于一个 32-layer model：<code>32 × 2 = 64 AllReduces</code> per forward pass。</p>
+
+    <h1>Tensor Parallelism 下的 KV Cache</h1>
+    <h2>每张 GPU 只存自己的 KV Heads</h2>
+    <p>因为 K 和 V projections 是 column-wise sharded 的，所以每张 GPU 只会计算本地 KV heads 的 K 和 V。KV cache 也自然被 partition：</p>
+    <ul>
+      <li>GPU 0 KV cache: KV head 0 的 K, V → 每个 token 的 shape：<code>[2, n_layers, 1, d_head]</code></li>
+      <li>GPU 1 KV cache: KV head 1 的 K, V → 每个 token 的 shape：<code>[2, n_layers, 1, d_head]</code></li>
+      <li>GPU 2 KV cache: KV head 2 的 K, V → 每个 token 的 shape：<code>[2, n_layers, 1, d_head]</code></li>
+      <li>GPU 3 KV cache: KV head 3 的 K, V → 每个 token 的 shape：<code>[2, n_layers, 1, d_head]</code></li>
+    </ul>
+    <p>没有共享的 KV cache。每张 GPU 都在自己的 HBM 里独立管理自己的 paged block pool。</p>
+
+    <h2>Block Tables 是 per-GPU 的</h2>
+    <p>CPU scheduler 管理 logical block IDs。同一个 logical block ID 在不同 GPU 上会映射到不同的 physical HBM address，但它们都存相同 token positions，只是存的是不同 heads 的 KV data：</p>
+    <ul>
+      <li>CPU 为一个 request 分配 logical block IDs <code>[4, 7, 12]</code>。</li>
+      <li>GPU 0: <code>block_table[4]</code> → GPU 0 HBM base + <code>4 * page_size</code> (KV head 0 data)</li>
+      <li>GPU 1: <code>block_table[4]</code> → GPU 1 HBM base + <code>4 * page_size</code> (KV head 1 data)</li>
+      <li>GPU 2: <code>block_table[4]</code> → GPU 2 HBM base + <code>4 * page_size</code> (KV head 2 data)</li>
+      <li>GPU 3: <code>block_table[4]</code> → GPU 3 HBM base + <code>4 * page_size</code> (KV head 3 data)</li>
+    </ul>
+    <p>在 request level，scheduler 通常可以操作 logical block IDs，而不是直接操作每个 TP shard。从这个视角看：</p>
+    <ul>
+      <li>它照常管理 logical block IDs。</li>
+      <li>它为每个 request 分配 block tables。</li>
+      <li>它把相同的 logical block table 发送给所有 TP ranks。</li>
+      <li>Forward pass 结束后，它读回一组 output token IDs。</li>
+    </ul>
+    <p>但这<strong>不</strong>意味着 serving engine 完全不需要感知 TP。Engine 仍然知道 TP size、per-rank KV capacity、distributed executor layout 和 model-shard placement。TP details 在 request-level scheduling 中大多被隐藏，但它们仍然影响 initialization、memory capacity 和 physical block allocation。</p>
+    <p>更清晰的拆分是：</p>
+    <ul>
+      <li><strong>request scheduler</strong> ← 主要处理 requests 和 logical KV blocks</li>
+      <li><strong>distributed GPU executor</strong> ← TP-aware，负责把 logical blocks 映射到 per-rank physical KV pages，并运行 sharded model</li>
+    </ul>
+    <p>边界大致是：logical block tables 进，token IDs 出。TP 大多被封装在 GPU execution layer 里，但 capacity planning 和 worker initialization 仍然依赖它。</p>
+
+    <h2>Decode：不需要 KV 通信</h2>
+    <p>Decode 阶段，每张 GPU 读取自己的本地 KV pages。Attention-score computation 是完全本地的：GPU <code>i</code> 只使用自己 HBM 里的 <code>K_i</code> 和 <code>V_i</code>。</p>
+    <p>用于 parallel attention 的 head-based split，和用于 partition KV cache 的 split 是同一个 split。它们是同一份数据的同一组 slices。</p>
+
+    <h2>Memory Implication</h2>
+    <p>在这个 Qwen2.5-7B 的 <code>TP=4</code> 例子里，每张 GPU 存总 KV cache 的四分之一，因为 4 个 KV heads 被均匀切到了 4 个 TP ranks 上。在大 batch size 下，KV cache 往往是 HBM 的主要消耗者，所以这种 head split 可以分摊 KV-memory cost。</p>
+    <p>这个 <code>1/TP</code> 的 KV-memory reduction 是有条件的：它假设 KV heads 被均匀 sharded 到 TP ranks 上。如果 KV heads 被 replicated，或者 backend 使用不同的 GQA/MQA layout，那么 KV-memory saving 可能更小，甚至不存在。</p>
+
+    <h2>Prefix Caching With TP</h2>
+    <p><mark class="highlight-pink_background"><strong>CPU radix tree 照常存 logical block IDs。</strong></mark> <mark class="highlight-pink_background"><strong>Cache hit 时，block table 会同时传给所有 GPU。</strong></mark> 每张 GPU 独立读取自己的本地 KV pages，因此不需要跨 GPU 协调。</p>
+
+    <h1>TP 下的 Input Embedding 和 LM Head</h1>
+    <p>Transformer block 是大多数 TP 行为发生的地方，但模型还有两个边界层也会被 sharded，只是它们使用的是另一种模式：<strong>vocabulary parallelism</strong>。</p>
+
+    <h2>Input Embedding (vocabulary-parallel)</h2>
+    <p>Embedding table <code>E ∈ R^{V × d_model}</code> 把 token IDs 映射成 dense vectors，其中 <code>V</code> 是 vocabulary size。在 TP 下，vocabulary dimension 会被 sharded 到多张 GPU 上：</p>
+    <ul>
+      <li>GPU <code>i</code> 持有 <code>E_shard_i: [V/TP, d_model]</code>，也就是它负责的 vocab range 里的 rows。</li>
+    </ul>
+    <p>每张 GPU 执行一次 <strong>masked lookup</strong>：如果一个 token ID 落在它的 vocab range 内，就取出对应 embedding；否则输出 zeros。随后，TP ranks 之间通过 <strong>AllReduce</strong> 把每个 rank 的结果合成完整 embedding tensor，并 replicated 到所有 GPU 上，准备进入第 0 层。</p>
+    <p>换句话说，input embedding 会在第一个 Transformer layer 之前，为 forward pass 额外增加一次 AllReduce。</p>
+
+    <h2>LM Head (vocabulary-parallel)</h2>
+    <p>LM head 是 embedding 的 transpose pattern：</p>
+    <ul>
+      <li><code>W_LM ∈ R^{d_model × V}</code> 把 final hidden state 映射成 vocabulary logits。</li>
+      <li>有些模型会 tie LM head weights 和 input embedding。Qwen2.5-1.5B 会这样做；Llama-3 70B 不会。</li>
+      <li>无论是否 tie weights，LM head 都会沿 vocabulary dimension sharded。</li>
+      <li>GPU <code>i</code> 持有 <code>W_LM_shard_i: [d_model, V/TP]</code>。</li>
+      <li>GPU <code>i</code> 计算 <code>logits_i = hidden @ W_LM_shard_i</code> → <code>[batch, seq_len, V/TP]</code>。</li>
+    </ul>
+    <p>最后一步取决于 sampling 的实现方式。对于 greedy 或 top-k sampling，可以沿 vocab dimension 做一次 <strong>AllGather</strong>，把完整的 <code>[batch, seq_len, V]</code> logits 组装到所有 ranks 上，然后本地 sampling。有些实现会先在 <strong>每个 shard 内本地</strong>做 argmax 或 sample，再通过 <strong>AllReduce</strong> 比较本地 winner 和 score。这样可以避免传输完整 vocab tensor，但 top-k/top-p 会更复杂。</p>
+    <p>LM head 经常是 forward pass 里最大的单个 matmul。对于 Qwen2.5-1.5B 这种 hidden size 较小的模型，<code>V · d_model</code> 甚至可能接近一个完整 FFN layer。因此 vocabulary parallelism 对 throughput 很重要：它同时分摊 compute 和 memory。</p>
+
+    <h1>为什么 NVLink 重要</h1>
+    <p>Tensor parallelism 非常依赖高速 inter-GPU communication，因为每一层内部都有 AllReduce。GPU 之间是 tightly coupled 的。PCIe 对较小模型或较低 throughput 的部署可能可用，但对大模型 TP 来说，它经常会让 communication 成为 bottleneck。<mark class="highlight-pink_background">H100 上的 NVLink 提供大约 900 GB/s bidirectional bandwidth，这也是 tight tensor parallelism 能够实用的原因。</mark></p>
+    <p>这就是为什么 <mark class="highlight-pink_background"><strong>tensor parallelism 通常会被限制在单个 NVLink / NVSwitch domain 内</strong></mark>，而 pipeline parallelism 可以跨节点使用，因为节点之间通常只有 InfiniBand。</p>
+
+    <h1>Sequence Parallelism 和 Context Parallelism</h1>
+    <p>Plain tensor parallelism 切的是 model dimensions，而不是 sequence dimension。Pure TP implementation 里仍然存在 replicated-state regions，例如 <mark class="highlight-pink_background"><strong>RMSNorm 和 residual add</strong></mark>，每个 TP rank 都可能持有完整的 <code>[batch, seq_len, d_model]</code> activation。</p>
+    <p>在 training frameworks 里，<strong>Sequence Parallelism (SP)</strong> 经常和 TP 一起使用，用来减少这种 replicated activation memory。SP 会沿 sequence dimension sharding 一部分 activation states：</p>
+    <ul>
+      <li>在 RMSNorm / residual regions：每个 rank 可以持有 <code>[batch, seq_len / TP, d_model]</code>，也就是自己的 sequence slice。</li>
+      <li>在 TP-sharded matmul regions 附近：collectives 会在 sequence-sharded layout 和 tensor-sharded layout 之间搬运数据。</li>
+    </ul>
+    <p>一种常见实现会把类似 AllReduce 的 transition 拆成：</p>
+    <ul>
+      <li>当需要 full activations 时，沿 sequence dimension 做 <strong>AllGather</strong>。</li>
+      <li>当 summed outputs 可以回到 sequence-sharded form 时，做 <strong>ReduceScatter</strong>。</li>
+    </ul>
+    <p>总通信量可能和 AllReduce 接近，但这种拆分提供了更好的 memory saving 和 compute/communication overlap 机会。</p>
+    <p>对于 serving 和 inference，不要默认认为这种 training-style SP 会自动启用。Serving systems 可能使用 plain TP、TP 加 specialized communication overlap，或者为 long-context attention 单独使用 <strong>context parallelism</strong>。Context parallelism 也使用 sequence dimension，但它的目标通常是把 long-context attention/KV work 切到多张 GPU 上，而不是减少 training activation memory。</p>
+    <p>清晰的区分是：</p>
+    <ul>
+      <li><strong>Tensor Parallelism (TP)</strong>：切 model dimensions，例如 heads、hidden dimensions、FFN dimensions、vocab 和 KV heads。</li>
+      <li><strong>Sequence Parallelism (SP)</strong>：面向 training 的 activation sharding，沿 sequence dimension。</li>
+      <li><strong>Context Parallelism (CP)</strong>：面向 serving/long-context 的 sequence sharding，用于 attention/KV work。</li>
+    </ul>
+    <p>这一节是 TP 的自然延伸，但它不是上面描述的 basic TP mechanism 本身。</p>
+
+    <h1>完整 Transformer Layer 总结</h1>
+    <figure class="image">
+      <img src="/assets/tensor-parallelism/tp04.svg" alt="Full transformer layer tensor parallelism summary">
+      <figcaption>一个完整 Transformer layer 会在 replicated state、column-parallel matmuls、row-parallel partial sums 和 AllReduce 之间切换。</figcaption>
+    </figure>
+
+    <h1>Tensor Parallelism vs Pipeline Parallelism</h1>
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>Tensor Parallelism</th>
+          <th>Pipeline Parallelism</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>切分对象</td>
+          <td>单个 weight matrices</td>
+          <td>Layers</td>
+        </tr>
+        <tr>
+          <td>通信</td>
+          <td>每层内部 AllReduce，耦合很紧</td>
+          <td>Stages 之间传 activations，耦合较松</td>
+        </tr>
+        <tr>
+          <td>对 latency 的影响</td>
+          <td>如果 NVLink 足够快，影响较低</td>
+          <td>会引入 pipeline bubble</td>
+        </tr>
+        <tr>
+          <td>是否需要高速 interconnect</td>
+          <td>需要：优先 NVLink / NVSwitch</td>
+          <td>不一定：跨节点 InfiniBand 可以工作</td>
+        </tr>
+        <tr>
+          <td>典型使用范围</td>
+          <td>单节点内部</td>
+          <td>跨节点</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</article>

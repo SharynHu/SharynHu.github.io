@@ -542,6 +542,10 @@ pre code {
     color: black !important;
 }
 
+.post .page :not(pre) > code * {
+    color: black !important;
+}
+
 .post .page pre.code,
 .post .page pre.code.code-wrap {
     overflow-x: auto;

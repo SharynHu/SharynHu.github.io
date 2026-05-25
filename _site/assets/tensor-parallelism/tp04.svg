@@ -1,0 +1,162 @@
+<svg width="1200" height="1500" viewBox="0 0 1200 1500"
+xmlns="http://www.w3.org/2000/svg"
+xmlns:xlink="http://www.w3.org/1999/xlink">
+
+<defs>
+  <marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+    <polygon points="0 0, 10 3.5, 0 7" fill="#333"/>
+  </marker>
+</defs>
+
+<!-- helper style -->
+<g font-family="Arial" font-size="15" fill="#222">
+
+<!-- top -->
+<rect x="120" y="40" width="920" height="60" rx="8" fill="#eef3ff" stroke="#4a6cf7" stroke-width="2"/>
+<text x="140" y="75">x_residual: [batch, seq_len, d_model] (replicated)</text>
+
+<!-- title -->
+<text x="120" y="140" font-size="18">Attention sublayer</text>
+
+<!-- function to draw rows manually -->
+
+<!-- row 0 -->
+<rect x="120" y="160" width="420" height="44" rx="8" fill="#eef3ff" stroke="#4a6cf7" stroke-width="2"/>
+<text x="135" y="188">RMSNorm(x_residual)</text>
+
+<rect x="620" y="160" width="420" height="44" rx="8" fill="#eef3ff" stroke="#4a6cf7" stroke-width="2"/>
+<text x="635" y="188">[batch, seq_len, d_model]</text>
+
+<line x1="540" y1="182" x2="620" y2="182" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+
+<!-- row 1 -->
+<rect x="120" y="224" width="420" height="44" rx="8" fill="#eaf7ea" stroke="#4caf50" stroke-width="2"/>
+<text x="135" y="252">Q_i = X @ Q_proj_shard</text>
+
+<rect x="620" y="224" width="420" height="44" rx="8" fill="#eaf7ea" stroke="#4caf50" stroke-width="2"/>
+<text x="635" y="252">[batch, seq_len, (num_heads/4)*d_head]</text>
+
+<line x1="540" y1="246" x2="620" y2="246" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+
+<!-- row 2 -->
+<rect x="120" y="288" width="420" height="44" rx="8" fill="#eaf7ea" stroke="#4caf50" stroke-width="2"/>
+<text x="135" y="316">K_i = X @ K_proj_shard</text>
+
+<rect x="620" y="288" width="420" height="44" rx="8" fill="#eaf7ea" stroke="#4caf50" stroke-width="2"/>
+<text x="635" y="316">[batch, seq_len, (num_kv_heads/4)*d_head]</text>
+
+<line x1="540" y1="310" x2="620" y2="310" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+
+<!-- row 3 -->
+<rect x="120" y="352" width="420" height="44" rx="8" fill="#eaf7ea" stroke="#4caf50" stroke-width="2"/>
+<text x="135" y="380">V_i = X @ V_proj_shard</text>
+
+<rect x="620" y="352" width="420" height="44" rx="8" fill="#eaf7ea" stroke="#4caf50" stroke-width="2"/>
+<text x="635" y="380">[batch, seq_len, (num_kv_heads/4)*d_head]</text>
+
+<line x1="540" y1="374" x2="620" y2="374" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+
+<!-- row 4 -->
+<rect x="120" y="416" width="420" height="44" rx="8" fill="#eaf7ea" stroke="#4caf50" stroke-width="2"/>
+<text x="135" y="444">softmax(QKᵀ / √d) @ V</text>
+
+<rect x="620" y="416" width="420" height="44" rx="8" fill="#eaf7ea" stroke="#4caf50" stroke-width="2"/>
+<text x="635" y="444">[batch, num_heads/4, seq_len, d_head]</text>
+
+<line x1="540" y1="438" x2="620" y2="438" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+
+<!-- row 5 -->
+<rect x="120" y="480" width="420" height="44" rx="8" fill="#fff4e5" stroke="#ff9800" stroke-width="2"/>
+<text x="135" y="508">attn_out_i @ W_o_shard</text>
+
+<rect x="620" y="480" width="420" height="44" rx="8" fill="#fff4e5" stroke="#ff9800" stroke-width="2"/>
+<text x="635" y="508">[batch, seq_len, d_model]</text>
+
+<line x1="540" y1="502" x2="620" y2="502" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+
+<!-- row 6 -->
+<rect x="120" y="544" width="420" height="44" rx="8" fill="none" stroke="#7e57c2" stroke-width="2" stroke-dasharray="6,4"/>
+<text x="135" y="572">AllReduce #1</text>
+
+<rect x="620" y="544" width="420" height="44" rx="8" fill="#eef3ff" stroke="#4a6cf7" stroke-width="2"/>
+<text x="635" y="572">[batch, seq_len, d_model]</text>
+
+<line x1="540" y1="566" x2="620" y2="566" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+
+<!-- row 7 -->
+<rect x="120" y="608" width="420" height="44" rx="8" fill="#eef3ff" stroke="#4a6cf7" stroke-width="2"/>
+<text x="135" y="636">x_residual + Y_attn</text>
+
+<rect x="620" y="608" width="420" height="44" rx="8" fill="#eef3ff" stroke="#4a6cf7" stroke-width="2"/>
+<text x="635" y="636">[batch, seq_len, d_model]</text>
+
+<line x1="540" y1="630" x2="620" y2="630" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+
+<!-- FFN -->
+<text x="120" y="720" font-size="18">FFN sublayer</text>
+
+<!-- row 8 -->
+<rect x="120" y="740" width="420" height="44" rx="8" fill="#eef3ff" stroke="#4a6cf7" stroke-width="2"/>
+<text x="135" y="768">RMSNorm(x_residual)</text>
+
+<rect x="620" y="740" width="420" height="44" rx="8" fill="#eef3ff" stroke="#4a6cf7" stroke-width="2"/>
+<text x="635" y="768">[batch, seq_len, d_model]</text>
+
+<line x1="540" y1="762" x2="620" y2="762" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+
+<!-- row 9 -->
+<rect x="120" y="804" width="420" height="44" rx="8" fill="#eaf7ea" stroke="#4caf50" stroke-width="2"/>
+<text x="135" y="832">gate = SiLU(X @ W_gate_shard)</text>
+
+<rect x="620" y="804" width="420" height="44" rx="8" fill="#eaf7ea" stroke="#4caf50" stroke-width="2"/>
+<text x="635" y="832">[batch, seq_len, d_ffn/4]</text>
+
+<line x1="540" y1="826" x2="620" y2="826" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+
+<!-- row 10 -->
+<rect x="120" y="868" width="420" height="44" rx="8" fill="#eaf7ea" stroke="#4caf50" stroke-width="2"/>
+<text x="135" y="896">up = X @ W_up_shard</text>
+
+<rect x="620" y="868" width="420" height="44" rx="8" fill="#eaf7ea" stroke="#4caf50" stroke-width="2"/>
+<text x="635" y="896">[batch, seq_len, d_ffn/4]</text>
+
+<line x1="540" y1="890" x2="620" y2="890" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+
+<!-- row 11 -->
+<rect x="120" y="932" width="420" height="44" rx="8" fill="#eaf7ea" stroke="#4caf50" stroke-width="2"/>
+<text x="135" y="960">hidden = gate * up</text>
+
+<rect x="620" y="932" width="420" height="44" rx="8" fill="#eaf7ea" stroke="#4caf50" stroke-width="2"/>
+<text x="635" y="960">[batch, seq_len, d_ffn/4]</text>
+
+<line x1="540" y1="954" x2="620" y2="954" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+
+<!-- row 12 -->
+<rect x="120" y="996" width="420" height="44" rx="8" fill="#fff4e5" stroke="#ff9800" stroke-width="2"/>
+<text x="135" y="1024">hidden @ W_down_shard</text>
+
+<rect x="620" y="996" width="420" height="44" rx="8" fill="#fff4e5" stroke="#ff9800" stroke-width="2"/>
+<text x="635" y="1024">[batch, seq_len, d_model]</text>
+
+<line x1="540" y1="1018" x2="620" y2="1018" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+
+<!-- row 13 -->
+<rect x="120" y="1060" width="420" height="44" rx="8" fill="none" stroke="#7e57c2" stroke-width="2" stroke-dasharray="6,4"/>
+<text x="135" y="1088">AllReduce #2</text>
+
+<rect x="620" y="1060" width="420" height="44" rx="8" fill="#eef3ff" stroke="#4a6cf7" stroke-width="2"/>
+<text x="635" y="1088">[batch, seq_len, d_model]</text>
+
+<line x1="540" y1="1082" x2="620" y2="1082" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+
+<!-- row 14 -->
+<rect x="120" y="1124" width="420" height="44" rx="8" fill="#eef3ff" stroke="#4a6cf7" stroke-width="2"/>
+<text x="135" y="1152">x_residual + Y_ffn</text>
+
+<rect x="620" y="1124" width="420" height="44" rx="8" fill="#eef3ff" stroke="#4a6cf7" stroke-width="2"/>
+<text x="635" y="1152">[batch, seq_len, d_model]</text>
+
+<line x1="540" y1="1146" x2="620" y2="1146" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+
+</g>
+</svg>

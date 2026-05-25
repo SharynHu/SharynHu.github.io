@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>Tensor Parallelism | Sharyn Hu</title>
+		<link rel="stylesheet" type="text/css" href="/css/main.css">
+		<link rel="stylesheet" href="/css/syntax.css">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" integrity="sha512-tN7Ec6zAFaVSG3TpNAKtk4DOHNpSwKHxxrsiw4GHKESGPs5njn/0sMCUMl2svV4wo4BK/rCP7juYz+zx+l6oeQ==" crossorigin="anonymous" referrerpolicy="no-referrer">
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js" integrity="sha512-7Z9J3l1+EYfeaPKcGXu3MS/7T+w19WtKQY/n+xzmw4hZhJ9tyYmcUS+4QqAlzhicE5LAfMQSF3iFTK9bQdTxXg==" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+		<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+		<script type="text/x-mathjax-config">
+			MathJax.Hub.Config({
+				tex2jax: {
+					skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+					inlineMath: [['$','$']]
+				}
+			});
+		</script>
+	</head>
+	<body>
+		
+			<header class="site-header">
+				<a class="site-title" href="/">Sharyn Hu</a>
+				<p class="site-tagline">Notes on computer science, systems, and machine learning.</p>
+				<nav class="site-nav">
+					<a href="/">Home</a>
+					<a href="/blog">Blog</a>
+				</nav>
+			</header>
+		
+
+		<main class="container">
+			<article class="post">
+	<header class="post-header">
+		<p class="meta">25 May 2026</p>
+		<h1 class="post-title">Tensor Parallelism</h1>
+		<nav class="language-switch" aria-label="Post language"><span class="language-option is-active" aria-current="true">English</span><a class="language-option" href="/blog/2026/05/25/tensor-parallelism-zh">中文</a></nav>
+	</header>
+	<article class="page sans" id="tensor-parallelism">
+  <div class="page-body">
+    <h1>The Problem It Solves</h1>
+    <p>A large model's weight matrices do not fit in one GPU's HBM. Even if they did, a single GPU's compute might become the throughput bottleneck. Tensor parallelism splits individual <strong>weight matrices</strong> across multiple GPUs so the matrix multiplications can be computed in parallel.</p>
+    <p>The attention score computation itself, <code>softmax(QKᵀ/√d) @ V</code>, is not split by tensor parallelism. It runs fully and locally on each GPU for that GPU's assigned heads.</p>
+    <p>Assume 4-way tensor parallelism, <code>TP=4</code>, throughout this page. The forward pass alternates between two states:</p>
+    <ul>
+      <li><strong>Replicated state</strong>: every GPU holds identical <code>x: [batch, seq_len, d_model]</code>. Cheap local operations such as RMSNorm and residual add run with no communication.</li>
+      <li><strong>Sharded state</strong>: each GPU holds a different slice of an intermediate. Expensive matmuls run in parallel, then an AllReduce returns the output to replicated state.</li>
+    </ul>
+
+    <h1>Terminology</h1>
+    <p>To be precise throughout this page:</p>
+    <ul>
+      <li><strong>Transformer layer</strong> — the full repeating unit stacked N times. Contains two sublayers.</li>
+      <li><strong>Attention sublayer</strong> — first half of a transformer layer: RMSNorm + attention mechanism + residual add.</li>
+      <li><strong>Attention mechanism</strong> — Q/K/V projections + score computation + output projection. No norm, no residual.</li>
+      <li><strong>FFN sublayer</strong> — second half of a transformer layer: RMSNorm + SwiGLU FFN + residual add.</li>
+      <li><strong>SwiGLU FFN</strong> — the three weight matrices plus activation. No norm, no residual.</li>
+    </ul>
+
+    <h1>Attention Sublayer: Step by Step</h1>
+    <p>The attention sublayer contains: <strong>RMSNorm → attention mechanism → residual add</strong>.</p>
+    <p>Modern transformers use <strong>GQA (Grouped Query Attention)</strong>:</p>
+    <ul>
+      <li><code>num_heads</code> query heads</li>
+      <li><code>num_kv_heads</code> key/value heads, where <code>num_kv_heads &lt; num_heads</code></li>
+    </ul>
+    <p>For example, Qwen2.5-7B uses <code>num_heads=28</code> and <code>num_kv_heads=4</code>.</p>
+
+    <aside class="callout">
+      <div class="callout-icon">👉</div>
+      <div>
+        <p><strong>GQA constraint under TP</strong></p>
+        <p>Many implementations require TP to divide the attention-head and KV-head layout cleanly.</p>
+        <ul>
+          <li>If <code>TP ≤ num_kv_heads</code> and <code>num_kv_heads % TP == 0</code>, each rank can get <code>num_kv_heads / TP</code> distinct KV heads.</li>
+          <li>If <code>TP &gt; num_kv_heads</code>, KV heads may need replication or special grouping, depending on the backend. Some systems restrict these TP choices instead of supporting every layout.</li>
+        </ul>
+      </div>
+    </aside>
+
+    <p>With <code>TP=4</code>, heads are divided across GPUs:</p>
+    <ul>
+      <li>GPU 0: Q heads 0-6, KV head 0</li>
+      <li>GPU 1: Q heads 7-13, KV head 1</li>
+      <li>GPU 2: Q heads 14-20, KV head 2</li>
+      <li>GPU 3: Q heads 21-27, KV head 3</li>
+    </ul>
+
+    <h2>RMSNorm (pre-attention)</h2>
+    <p><strong>RMSNorm is replicated on all GPUs.</strong></p>
+    <p>Each RMSNorm instance computes:</p>
+    <div class="math-display">
+\[
+\mathrm{RMS}(x)=\sqrt{\frac{1}{d}\sum_{i=1}^{d} x_i^2 + \epsilon}
+\]
+    </div>
+    <div class="math-display">
+\[
+\mathrm{RMSNorm}(x)=\gamma \odot \frac{x}{\mathrm{RMS}(x)}
+\]
+    </div>
+    <ul>
+      <li>RMSNorm requires the <strong>full</strong> <code>d_model</code> vector to compute the RMS, because it reduces across all <code>d_model</code> elements.</li>
+      <li><strong>RMSNorm is not tensor-parallelized.</strong></li>
+      <li><strong>All GPUs run it simultaneously and independently, producing identical results.</strong> No GPU waits.</li>
+      <li>Each RMSNorm instance has its own independent <code>γ: [d_model]</code>, replicated on every GPU.</li>
+    </ul>
+    <p>After the previous layer's AllReduce, except for layer 0, the input matrix <code>x</code> is complete and identical on all GPUs:</p>
+    <ul>
+      <li>GPU 0: <code>x: [batch, seq_len, d_model]</code> ← complete, identical copy</li>
+      <li>GPU 1: <code>x: [batch, seq_len, d_model]</code> ← complete, identical copy</li>
+      <li>GPU 2: <code>x: [batch, seq_len, d_model]</code> ← complete, identical copy</li>
+      <li>GPU 3: <code>x: [batch, seq_len, d_model]</code> ← complete, identical copy</li>
+    </ul>
+    <p>All four GPUs run <code>RMSNorm(x)</code> locally and simultaneously. They get the same result, with no communication.</p>
+
+    <h2>Q, K, V Projections (column-wise split)</h2>
+    <p>Recall the QKV projection for Grouped Query Attention:</p>
+    <div class="math-display">
+\[
+W_Q \in \mathbb{R}^{d_{model} \times \text{num\_q\_heads}\times d_{head}}, \quad
+W_K \in \mathbb{R}^{d_{model} \times \text{num\_kv\_heads}\times d_{head}}, \quad
+W_V \in \mathbb{R}^{d_{model} \times \text{num\_kv\_heads}\times d_{head}}
+\]
+    </div>
+    <div class="math-display">
+\[
+Q = XW_Q,\quad K = XW_K,\quad V = XW_V
+\]
+    </div>
+    <p>Considering one input vector <code>x</code>, we multiply it with each column of the weight matrix <code>W_Q</code>:</p>
+    <div class="math-display">
+\[
+q_j = x \cdot W_Q[:,j]
+\]
+    </div>
+    <p>Each column of a projection matrix produces one independent output feature: a scalar that is a learned linear combination of all <code>d_model</code> input elements.</p>
+    <figure class="image">
+      <img src="/assets/tensor-parallelism/tp01.svg" alt="Column-wise projection split across tensor-parallel ranks">
+      <figcaption>Each output feature corresponds to a column, so the output-feature dimension can be sharded across GPUs.</figcaption>
+    </figure>
+    <p>Since output features are independent, the weight matrix can be split column-wise across GPUs without changing correctness. Each GPU computes its own subset of output features.</p>
+    <p><strong>Weight shards per GPU:</strong></p>
+    <ul>
+      <li><code>Q_proj: [d_model, num_q_heads/4 * d_head]</code></li>
+      <li><code>K_proj: [d_model, num_kv_heads/4 * d_head]</code></li>
+      <li><code>V_proj: [d_model, num_kv_heads/4 * d_head]</code></li>
+    </ul>
+    <p>After the projection, each GPU holds its own portion of QKV, split by heads:</p>
+    <ul>
+      <li><code>Q_i = X @ Q_proj_shard_i</code> → <code>[batch, seq_len, (num_q_heads/4) * d_head]</code></li>
+      <li><code>K_i = X @ K_proj_shard_i</code> → <code>[batch, seq_len, (num_kv_heads/4) * d_head]</code></li>
+      <li><code>V_i = X @ V_proj_shard_i</code> → <code>[batch, seq_len, (num_kv_heads/4) * d_head]</code></li>
+    </ul>
+    <figure class="image">
+      <img src="/assets/tensor-parallelism/tp02.svg" alt="QKV heads sharded across four GPUs">
+      <figcaption>After column-parallel QKV projection, each GPU owns its local Q/K/V heads.</figcaption>
+    </figure>
+    <p>We are now in the sharded state. No communication happens here: each GPU works independently on the same <code>X</code>.</p>
+
+    <h2>Attention Score Computation (fully local)</h2>
+    <p>Each GPU runs the complete attention math for its own heads. The attention score computation is not tensor-parallelized. It is local to each GPU because heads are independent of one another.</p>
+    <p>GPU <code>i</code> reshapes:</p>
+    <ul>
+      <li><code>Q_i: [batch, num_q_heads/4, seq_len, d_head]</code></li>
+      <li><code>K_i: [batch, num_kv_heads/4, seq_len, d_head]</code></li>
+      <li><code>V_i: [batch, num_kv_heads/4, seq_len, d_head]</code></li>
+    </ul>
+    <p>GPU <code>i</code> computes:</p>
+    <ul>
+      <li><code>scores_i = softmax(Q_i @ K_i.T / sqrt(d_head))</code> → <code>[batch, num_q_heads/4, seq, seq]</code></li>
+      <li><code>attn_out_i = scores_i @ V_i</code> → <code>[batch, num_q_heads/4, seq, d_head]</code></li>
+    </ul>
+    <p><mark class="highlight-pink_background">No communication. GPU <code>i</code> has everything it needs.</mark></p>
+
+    <h2>Output Projection (row-wise split)</h2>
+    <p>Without tensor parallelism, the outputs of all heads would be concatenated first, then multiplied by <code>W_o</code>.</p>
+    <p>Under TP, each GPU holds a partial concatenation, meaning its own heads' outputs, and the corresponding row shard of <code>W_o</code>. Each GPU produces a partial sum across the full <code>d_model</code> output dimension. That partial sum is incomplete on its own, so it must be summed across GPUs.</p>
+    <ul>
+      <li>GPU <code>i</code> holds <code>attn_out_i</code> reshaped as <code>[batch, seq_len, (num_q_heads/4) * d_head]</code></li>
+      <li>GPU <code>i</code> holds row shard <code>W_o_shard_i: [(num_heads/4) * d_head, d_model]</code></li>
+    </ul>
+    <p>GPU <code>i</code> computes:</p>
+    <ul>
+      <li><code>partial_i = attn_out_i @ W_o_shard_i</code> → <code>[batch, seq_len, d_model]</code></li>
+    </ul>
+    <p>Although <code>partial_i</code> has the same shape as the final output, each element is generated only from <code>attn_out_i</code>, which has one quarter of <code>attn_out</code>. The next step is an <code>AllReduce</code> to recover the full output.</p>
+    <figure class="image">
+      <img src="/assets/tensor-parallelism/tp03.svg" alt="Row-wise output projection followed by AllReduce">
+      <figcaption>Row-parallel projection produces per-rank partial sums that must be reduced.</figcaption>
+    </figure>
+
+    <h2>AllReduce #1 + Residual Add</h2>
+    <ul>
+      <li><code>Y_attn = AllReduce(partial_0 + partial_1 + partial_2 + partial_3)</code><br>→ <code>[batch, seq_len, d_model]</code>, full result replicated on all GPUs.</li>
+      <li><code>x_residual = x_residual + Y_attn</code> → <code>[batch, seq_len, d_model]</code>, replicated.</li>
+    </ul>
+    <p>We return to the replicated state. The attention sublayer is complete.</p>
+    <aside class="callout">
+      <div class="callout-icon">⚠️</div>
+      <div>
+        <p><strong>Bias handling under row-parallel projection</strong></p>
+        <p>If the row-parallel projection, such as <code>W_o</code> here or <code>W_down</code> later, has a bias term, the bias must be added <strong>after</strong> the AllReduce on one rank only, then replicated. Adding the bias locally to <code>partial_i</code> before the AllReduce would sum it <code>TP</code> times.</p>
+        <p>Llama and Qwen2.5 both use bias-free <code>W_o</code> and <code>W_down</code>, so this is latent in most current deployments. Qwen2.5 does use bias on Q/K/V, which are column-parallel; that bias is sharded with its matrix and added locally, so no correction is needed there.</p>
+      </div>
+    </aside>
+
+    <h1>FFN Sublayer: Step by Step</h1>
+    <p>The FFN sublayer contains: <strong>RMSNorm → SwiGLU FFN → residual add</strong>.</p>
+    <p>Modern LLMs such as Llama, Qwen, and Mistral use <strong>SwiGLU</strong> instead of a plain FFN. SwiGLU has three weight matrices:</p>
+    <ul>
+      <li><code>W_gate: [d_model, d_ffn]</code> ← gating branch</li>
+      <li><code>W_up: [d_model, d_ffn]</code> ← value branch</li>
+      <li><code>W_down: [d_ffn, d_model]</code> ← projects back to <code>d_model</code></li>
+      <li><code>output = (SiLU(X @ W_gate) * (X @ W_up)) @ W_down</code></li>
+    </ul>
+    <p>The element-wise multiply between the gate branch and the up branch is the gated activation. A standard FFN does <code>activation(X @ W1) @ W2</code>. SwiGLU adds a learned gate that filters the value branch.</p>
+
+    <h2>RMSNorm (pre-FFN)</h2>
+    <p>This is the same as the RMSNorm before attention.</p>
+    <ul>
+      <li><code>x_residual: [batch, seq_len, d_model]</code> ← from the attention sublayer residual add, replicated.</li>
+      <li>All GPUs compute locally and simultaneously: <code>X = RMSNorm(x_residual)</code> → <code>[batch, seq_len, d_model]</code>, replicated.</li>
+    </ul>
+    <p>This is the replicated state. No communication is needed.</p>
+
+    <h2>Gate and Up Projections (column-wise split)</h2>
+    <p>Same logic as Q/K/V: output features of <code>W_gate</code> and <code>W_up</code> are independent, so the column dimension can be sharded. Crucially, GPU <code>i</code>'s gate shard and up shard cover the <strong>same slice of <code>d_ffn</code></strong>, so their element-wise multiply is local and correct.</p>
+    <p>GPU <code>i</code> holds one quarter of <code>W_gate</code> and <code>W_up</code>, sharded by column:</p>
+    <ul>
+      <li><code>W_gate_shard_i: [d_model, d_ffn/4]</code></li>
+      <li><code>W_up_shard_i: [d_model, d_ffn/4]</code></li>
+    </ul>
+    <p>GPU <code>i</code> computes:</p>
+    <ul>
+      <li><code>gate_i = SiLU(X @ W_gate_shard_i)</code> → <code>[batch, seq_len, d_ffn/4]</code></li>
+      <li><code>up_i = X @ W_up_shard_i</code> → <code>[batch, seq_len, d_ffn/4]</code></li>
+      <li><code>hidden_i = gate_i * up_i</code> → <code>[batch, seq_len, d_ffn/4]</code>, element-wise and local.</li>
+    </ul>
+    <p>No communication. Both gate and up cover the same <code>d_ffn</code> slice, so the multiply needs no data from other GPUs.</p>
+
+    <h2>Down Projection (row-wise split)</h2>
+    <p><code>hidden_i</code> has shape <code>[batch, seq_len, d_ffn/4]</code>. <code>W_down</code> maps <code>d_ffn → d_model</code>. Each GPU holds the corresponding row shard.</p>
+    <p>GPU <code>i</code> holds one quarter of <code>W_down</code>, sharded by row:</p>
+    <ul>
+      <li><code>W_down_shard_i: [d_ffn/4, d_model]</code></li>
+    </ul>
+    <p>GPU <code>i</code> computes:</p>
+    <ul>
+      <li><code>partial_i = hidden_i @ W_down_shard_i</code> → <code>[batch, seq, d_model]</code>, a partial sum.</li>
+    </ul>
+
+    <h2>AllReduce #2 + Residual Add</h2>
+    <ul>
+      <li><code>Y_ffn = AllReduce(partial_0 + partial_1 + partial_2 + partial_3)</code><br>→ <code>[batch, seq_len, d_model]</code>, full result replicated on all GPUs.</li>
+      <li><code>x_residual = x_residual + Y_ffn</code> → <code>[batch, seq_len, d_model]</code>, replicated.</li>
+    </ul>
+    <p>We are back in the replicated state, ready for the next transformer layer.</p>
+    <p>Per transformer layer: <strong>2 AllReduces total</strong>.</p>
+    <p>For a 32-layer model: <code>32 × 2 = 64 AllReduces</code> per forward pass.</p>
+
+    <h1>KV Cache Under Tensor Parallelism</h1>
+    <h2>Each GPU Stores Only Its Own KV Heads</h2>
+    <p>Since K and V projections are column-wise sharded, each GPU only computes K and V for its local KV heads. The KV cache is naturally partitioned:</p>
+    <ul>
+      <li>GPU 0 KV cache: K, V for KV head 0 → shape per token: <code>[2, n_layers, 1, d_head]</code></li>
+      <li>GPU 1 KV cache: K, V for KV head 1 → shape per token: <code>[2, n_layers, 1, d_head]</code></li>
+      <li>GPU 2 KV cache: K, V for KV head 2 → shape per token: <code>[2, n_layers, 1, d_head]</code></li>
+      <li>GPU 3 KV cache: K, V for KV head 3 → shape per token: <code>[2, n_layers, 1, d_head]</code></li>
+    </ul>
+    <p>No shared KV cache. Each GPU manages its own paged block pool in its own HBM independently.</p>
+
+    <h2>Block Tables Are Per-GPU</h2>
+    <p>The CPU scheduler manages logical block IDs. The same logical block ID maps to different physical HBM addresses on each GPU, but all store the same token positions and different heads' KV data:</p>
+    <ul>
+      <li>CPU assigns logical block IDs <code>[4, 7, 12]</code> for a request.</li>
+      <li>GPU 0: <code>block_table[4]</code> → GPU 0 HBM base + <code>4 * page_size</code> (KV head 0 data)</li>
+      <li>GPU 1: <code>block_table[4]</code> → GPU 1 HBM base + <code>4 * page_size</code> (KV head 1 data)</li>
+      <li>GPU 2: <code>block_table[4]</code> → GPU 2 HBM base + <code>4 * page_size</code> (KV head 2 data)</li>
+      <li>GPU 3: <code>block_table[4]</code> → GPU 3 HBM base + <code>4 * page_size</code> (KV head 3 data)</li>
+    </ul>
+    <p>At the request level, the scheduler can usually operate on logical block IDs instead of individual TP shards. From this perspective:</p>
+    <ul>
+      <li>It manages logical block IDs as usual.</li>
+      <li>It assigns block tables per request.</li>
+      <li>It sends the same logical block table to all TP ranks.</li>
+      <li>It reads back a single set of output token IDs after the forward pass.</li>
+    </ul>
+    <p>But this does <strong>not</strong> mean the serving engine has no TP awareness. The engine still knows TP size, per-rank KV capacity, distributed executor layout, and model-shard placement. TP details are mostly hidden from request-level scheduling, but they still affect initialization, memory capacity, and physical block allocation.</p>
+    <p>A cleaner decomposition is:</p>
+    <ul>
+      <li><strong>request scheduler</strong> ← mostly works with requests and logical KV blocks</li>
+      <li><strong>distributed GPU executor</strong> ← TP-aware, maps logical blocks to per-rank physical KV pages and runs the sharded model</li>
+    </ul>
+    <p>The boundary is close to: logical block tables in, token IDs out. TP is mostly contained inside the GPU execution layer, but capacity planning and worker initialization still depend on it.</p>
+
+    <h2>Decode: No KV Communication Needed</h2>
+    <p>During decode, each GPU reads its local KV pages. The attention-score computation is fully local: GPU <code>i</code> uses only its own <code>K_i</code> and <code>V_i</code> from its own HBM.</p>
+    <p>The head-based split that enables parallel attention is the same split that partitions the KV cache. They are the same slices of the same data.</p>
+
+    <h2>Memory Implication</h2>
+    <p>With <code>TP=4</code> in this Qwen2.5-7B example, each GPU stores one quarter of the total KV cache because the 4 KV heads are evenly sharded across the 4 TP ranks. KV cache is often the dominant consumer of HBM at large batch sizes, so this head split can distribute the KV-memory cost.</p>
+    <p>This <code>1/TP</code> KV-memory reduction is conditional: it assumes KV heads are evenly sharded across TP ranks. If KV heads are replicated, or if the backend uses a different GQA/MQA layout, the KV-memory saving can be smaller or absent.</p>
+
+    <h2>Prefix Caching With TP</h2>
+    <p><mark class="highlight-pink_background"><strong>The CPU radix tree stores logical block IDs as usual.</strong></mark> <mark class="highlight-pink_background"><strong>On a cache hit, the block table is passed to all GPUs simultaneously.</strong></mark> Each GPU independently reads its local KV pages, so no cross-GPU coordination is needed.</p>
+
+    <h1>Input Embedding and LM Head Under TP</h1>
+    <p>The transformer block is where most of the TP action happens, but the model has two boundary layers that are also sharded with a different pattern: <strong>vocabulary parallelism</strong>.</p>
+
+    <h2>Input Embedding (vocabulary-parallel)</h2>
+    <p>The embedding table <code>E ∈ R^{V × d_model}</code> maps token IDs to dense vectors, where <code>V</code> is the vocabulary size. Under TP, the vocabulary dimension is sharded across GPUs:</p>
+    <ul>
+      <li>GPU <code>i</code> holds <code>E_shard_i: [V/TP, d_model]</code>, the rows for token IDs in its assigned vocab range.</li>
+    </ul>
+    <p>Each GPU performs a <strong>masked lookup</strong>: if a token ID falls in its vocab range, it fetches the embedding; otherwise it produces zeros. An <strong>AllReduce</strong> across TP ranks combines the per-rank results into the full embedding tensor, replicated on all GPUs and ready for layer 0.</p>
+    <p>In effect, the input embedding adds one more AllReduce to the forward pass, before the first transformer layer.</p>
+
+    <h2>LM Head (vocabulary-parallel)</h2>
+    <p>The LM head is the transpose pattern of the embedding:</p>
+    <ul>
+      <li><code>W_LM ∈ R^{d_model × V}</code> maps the final hidden state to vocabulary logits.</li>
+      <li>Some models tie LM head weights to the input embedding. Qwen2.5-1.5B does; Llama-3 70B does not.</li>
+      <li>Either way, the LM head is sharded along the vocabulary dimension.</li>
+      <li>GPU <code>i</code> holds <code>W_LM_shard_i: [d_model, V/TP]</code>.</li>
+      <li>GPU <code>i</code> computes <code>logits_i = hidden @ W_LM_shard_i</code> → <code>[batch, seq_len, V/TP]</code>.</li>
+    </ul>
+    <p>The final step depends on how sampling is implemented. For greedy or top-k sampling, an <strong>AllGather</strong> along the vocab dimension may assemble the full <code>[batch, seq_len, V]</code> logits on all ranks, then sampling happens locally. Some implementations instead do argmax or sample <strong>locally per shard</strong>, then <strong>AllReduce</strong> the local winner with its score. This avoids shipping the full vocab tensor but is trickier for top-k/top-p.</p>
+    <p>The LM head is often the single largest matmul in the forward pass. For small-hidden-size models like Qwen2.5-1.5B, <code>V · d_model</code> can rival a full FFN layer. That is why vocabulary parallelism matters for throughput: it distributes both compute and memory.</p>
+
+    <h1>Why NVLink Matters</h1>
+    <p>Tensor parallelism strongly prefers very fast inter-GPU communication because AllReduces happen inside every layer. The GPUs are tightly coupled. PCIe can work for smaller models or lower-throughput deployments, but for large-model TP it often makes communication the bottleneck. <mark class="highlight-pink_background">NVLink on H100 gives roughly 900 GB/s bidirectional bandwidth, which is what makes tight tensor parallelism practical.</mark></p>
+    <p>This is why <mark class="highlight-pink_background"><strong>tensor parallelism is typically kept within a single NVLink / NVSwitch domain</strong></mark>, while pipeline parallelism can be used across nodes where only InfiniBand is available.</p>
+
+    <h1>Sequence Parallelism and Context Parallelism</h1>
+    <p>Plain tensor parallelism shards model dimensions, not the sequence dimension. A pure TP implementation still has replicated-state regions, such as <mark class="highlight-pink_background"><strong>RMSNorm and residual add</strong></mark>, where every TP rank may hold the full <code>[batch, seq_len, d_model]</code> activation.</p>
+    <p>In training frameworks, <strong>Sequence Parallelism (SP)</strong> is often paired with TP to reduce this replicated activation memory. SP shards some activation states along the sequence dimension:</p>
+    <ul>
+      <li>In RMSNorm / residual regions: each rank can hold <code>[batch, seq_len / TP, d_model]</code>, its own sequence slice.</li>
+      <li>Around TP-sharded matmul regions: collectives move between sequence-sharded and tensor-sharded layouts.</li>
+    </ul>
+    <p>A common implementation decomposes an AllReduce-like transition into:</p>
+    <ul>
+      <li><strong>AllGather</strong> along the sequence dimension when full activations are needed.</li>
+      <li><strong>ReduceScatter</strong> when summed outputs can be returned to sequence-sharded form.</li>
+    </ul>
+    <p>Total communication volume may be similar to an AllReduce, but the decomposition exposes better opportunities for memory saving and compute/communication overlap.</p>
+    <p>For serving and inference, do not assume this training-style SP is automatically enabled. Serving systems may use plain TP, TP plus specialized communication overlap, or separate <strong>context parallelism</strong> for long-context attention. Context parallelism also uses the sequence dimension, but its goal is usually to split long-context attention/KV work across GPUs rather than to reduce training activation memory.</p>
+    <p>The clean separation is:</p>
+    <ul>
+      <li><strong>Tensor Parallelism (TP)</strong>: shards model dimensions such as heads, hidden dimensions, FFN dimensions, vocab, and KV heads.</li>
+      <li><strong>Sequence Parallelism (SP)</strong>: training-oriented activation sharding along the sequence dimension.</li>
+      <li><strong>Context Parallelism (CP)</strong>: serving/long-context-oriented sequence sharding for attention/KV work.</li>
+    </ul>
+    <p>This section is a natural extension of TP, but it is not part of the basic TP mechanism described above.</p>
+
+    <h1>Full Transformer Layer Summary</h1>
+    <figure class="image">
+      <img src="/assets/tensor-parallelism/tp04.svg" alt="Full transformer layer tensor parallelism summary">
+      <figcaption>A full transformer layer alternates between replicated state, column-parallel matmuls, row-parallel partial sums, and AllReduce.</figcaption>
+    </figure>
+
+    <h1>Tensor Parallelism vs Pipeline Parallelism</h1>
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>Tensor Parallelism</th>
+          <th>Pipeline Parallelism</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>What gets split</td>
+          <td>Individual weight matrices</td>
+          <td>Layers</td>
+        </tr>
+        <tr>
+          <td>Communication</td>
+          <td>AllReduce per layer (tight)</td>
+          <td>Activations between stages (loose)</td>
+        </tr>
+        <tr>
+          <td>Latency impact</td>
+          <td>Low if NVLink is fast</td>
+          <td>Adds pipeline bubble</td>
+        </tr>
+        <tr>
+          <td>Requires fast interconnect</td>
+          <td>Yes: NVLink / NVSwitch preferred</td>
+          <td>No: InfiniBand can work across nodes</td>
+        </tr>
+        <tr>
+          <td>Typical scope</td>
+          <td>Within a node</td>
+          <td>Across nodes</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</article>
+
+</article>
+
+		</main>
+
+
+		<style>
+			html body {
+				max-width: none !important;
+				margin: 0 !important;
+				padding: 0 24px !important;
+				color: var(--text) !important;
+				background: var(--bg) !important;
+				white-space: normal !important;
+			}
+
+			.site-header,
+			.container,
+			.site-footer {
+				max-width: 1120px !important;
+				margin-left: auto !important;
+				margin-right: auto !important;
+			}
+
+			.site-header {
+				background: var(--header-bg) !important;
+				box-shadow: 0 0 0 100vmax var(--header-bg) !important;
+				clip-path: inset(0 -100vmax) !important;
+			}
+
+			.site-header a,
+			.site-nav a,
+			.site-footer a {
+				text-decoration: none !important;
+			}
+
+			.post {
+				max-width: 1040px !important;
+				padding: 34px 40px 46px !important;
+				border: 1px solid var(--github-border) !important;
+				border-radius: 6px !important;
+				background: var(--surface) !important;
+				color: var(--github-text) !important;
+			}
+
+			.post-header {
+				margin-bottom: 2.25rem !important;
+				text-align: left !important;
+			}
+
+			.post-title {
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 2rem !important;
+				font-weight: 600 !important;
+				line-height: 1.2 !important;
+			}
+
+			.post .page,
+			.post .page-body {
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 16px !important;
+				line-height: 1.65 !important;
+				text-align: left !important;
+				white-space: normal !important;
+			}
+
+			.post .page-body {
+				counter-reset: section;
+			}
+
+			.post .page p,
+			.post .page li,
+			.post .page .collection-content,
+			.post .page .simple-table,
+			.post .page .table_of_contents-item,
+			.post .page .bookmark-title,
+			.post .page .bookmark-description,
+			.post .page .bookmark-href {
+				color: var(--github-text) !important;
+				font-size: 1rem !important;
+				line-height: 1.65 !important;
+			}
+
+
+			.language-switch {
+				display: inline-flex !important;
+				gap: 4px !important;
+				margin-top: 1rem !important;
+				padding: 3px !important;
+				border: 1px solid var(--github-border) !important;
+				border-radius: 999px !important;
+				background: var(--github-bg) !important;
+				font-family: var(--sans) !important;
+			}
+
+			.language-option {
+				display: inline-flex !important;
+				align-items: center !important;
+				min-height: 30px !important;
+				padding: 0.25rem 0.8rem !important;
+				border-radius: 999px !important;
+				color: var(--github-muted) !important;
+				font-size: 0.78rem !important;
+				font-weight: 700 !important;
+				letter-spacing: 0.04em !important;
+				line-height: 1 !important;
+				text-decoration: none !important;
+			}
+
+			.language-option:hover {
+				color: var(--github-text) !important;
+				text-decoration: none !important;
+			}
+
+			.language-option.is-active {
+				background: var(--surface) !important;
+				color: var(--github-text) !important;
+				box-shadow: 0 1px 2px rgba(31, 35, 40, 0.08) !important;
+			}
+
+			.language-option.is-disabled {
+				color: #8c959f !important;
+				cursor: not-allowed !important;
+			}
+
+
+			.translation-note {
+				margin: 1.5rem 0 0 !important;
+				padding: 1.1rem 1.25rem !important;
+				border: 1px solid var(--github-border) !important;
+				border-left: 4px solid #0969da !important;
+				border-radius: 6px !important;
+				background: var(--github-bg) !important;
+			}
+
+			.translation-note .eyebrow {
+				margin-bottom: 0.55rem !important;
+				color: var(--github-muted) !important;
+				font-size: 0.78rem !important;
+				font-weight: 700 !important;
+				letter-spacing: 0.08em !important;
+				text-transform: uppercase !important;
+			}
+
+			.translation-note p:last-child {
+				margin-bottom: 0 !important;
+			}
+
+			.post .page h1 {
+				counter-increment: section;
+				counter-reset: subsection;
+				margin: 2rem 0 1rem !important;
+				padding-bottom: 0.35rem !important;
+				border-bottom: 1px solid var(--github-border) !important;
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 1.55rem !important;
+				font-weight: 600 !important;
+				line-height: 1.3 !important;
+			}
+
+			.post .page h1::before {
+				content: counter(section) ". ";
+				color: var(--github-muted);
+			}
+
+			.post .page h2 {
+				counter-increment: subsection;
+				counter-reset: subsubsection;
+				margin: 1.6rem 0 0.8rem !important;
+				padding-bottom: 0.25rem !important;
+				border-bottom: 1px solid var(--github-border) !important;
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 1.25rem !important;
+				font-weight: 600 !important;
+				line-height: 1.35 !important;
+			}
+
+			.post .page h2::before {
+				content: counter(section) "." counter(subsection) " ";
+				color: var(--github-muted);
+			}
+
+			.post .page h3 {
+				counter-increment: subsubsection;
+				margin: 1.35rem 0 0.65rem !important;
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 1.1rem !important;
+				font-weight: 600 !important;
+				line-height: 1.35 !important;
+			}
+
+			.post .page h3::before {
+				content: counter(section) "." counter(subsection) "." counter(subsubsection) " ";
+				color: var(--github-muted);
+			}
+
+			.post .page :not(pre) > code {
+				padding: 0.2em 0.4em !important;
+				border-radius: 6px !important;
+				background: rgba(175, 184, 193, 0.2) !important;
+				color: black !important;
+			}
+
+			.post .page pre.code,
+			.post .page pre.code.code-wrap {
+				overflow-x: auto !important;
+				padding: 1.25em 1em !important;
+				border: 1px solid var(--github-border) !important;
+				border-radius: 6px !important;
+				background: var(--github-bg) !important;
+				white-space: pre !important;
+				word-break: normal !important;
+			}
+
+			.post .page pre.code code {
+				color: #37352f !important;
+				white-space: pre !important;
+				word-break: normal !important;
+			}
+
+			.post .page table {
+				width: 100% !important;
+				border-collapse: collapse !important;
+			}
+
+			.post .page th,
+			.post .page td {
+				border: 1px solid var(--github-border) !important;
+				padding: 0.45rem 0.65rem !important;
+			}
+
+			.post .page th {
+				background: var(--github-bg) !important;
+				font-weight: 600 !important;
+			}
+
+			.post .page a {
+				color: #0969da !important;
+			}
+
+			.post .page a:hover {
+				text-decoration: underline !important;
+			}
+
+			.post .page .highlight-gray_background {
+				background: rgba(42, 28, 0, 0.07) !important;
+			}
+
+			.post .page .highlight-brown_background {
+				background: rgba(139, 46, 0, 0.086) !important;
+			}
+
+			.post .page .highlight-orange_background {
+				background: rgba(224, 101, 1, 0.129) !important;
+			}
+
+			.post .page .highlight-yellow_background {
+				background: rgba(211, 168, 0, 0.137) !important;
+			}
+
+			.post .page .highlight-teal_background {
+				background: rgba(0, 100, 45, 0.09) !important;
+			}
+
+			.post .page .highlight-blue_background {
+				background: rgba(0, 124, 215, 0.094) !important;
+			}
+
+			.post .page .highlight-purple_background {
+				background: rgba(102, 0, 178, 0.078) !important;
+			}
+
+			.post .page .highlight-pink_background {
+				background: rgba(197, 0, 93, 0.086) !important;
+			}
+
+			.post .page .highlight-red_background {
+				background: rgba(223, 22, 0, 0.094) !important;
+			}
+
+			.post .page .callout {
+				display: flex !important;
+				gap: 0.75rem !important;
+				margin: 1rem 0 !important;
+				padding: 0.8rem 1rem !important;
+				border: 1px solid var(--github-border) !important;
+				border-left: 4px solid #0969da !important;
+				border-radius: 6px !important;
+				background: var(--github-bg) !important;
+				white-space: normal !important;
+			}
+
+			.post .page figure {
+				margin: 1.4rem 0 !important;
+			}
+
+			.post .page .notion-text-equation-token .katex {
+				font-size: 1.12em !important;
+			}
+
+			.post .page .katex-display,
+			.post .page figure.equation .katex {
+				font-size: 1.18em !important;
+			}
+
+			.post .page .equation {
+				overflow-x: auto !important;
+				padding: 0.75rem 0 !important;
+			}
+
+			@media only screen and (max-width: 720px) {
+				.post {
+					padding: 24px 18px 34px !important;
+				}
+			}
+		</style>
+
+		<footer class="site-footer">
+			<a href="mailto:sharynhu826@gmail.com">sharynhu826@gmail.com</a>
+			<a href="https://github.com/SharynHu">github.com/SharynHu</a>
+		</footer>
+	</body>
+</html>
