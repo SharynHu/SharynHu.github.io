@@ -37,51 +37,81 @@
 	<article class="post-card">
 		<p class="post-card-date">25 May 2026</p>
 		<h2><a href="/blog/2026/05/25/tensor-parallelism" title="Tensor Parallelism">Tensor Parallelism</a></h2>
+
+		<p class="post-card-description">How tensor parallelism splits LLM weight matrices across GPUs, and why it differs from sequence or context parallelism.</p>
+
 	</article>
 
 	<article class="post-card">
 		<p class="post-card-date">22 May 2026</p>
 		<h2><a href="/blog/2026/05/22/fp8-kv-cache" title="FP8 KV Cache">FP8 KV Cache</a></h2>
+
+		<p class="post-card-description">How FP8 KV cache saves memory by quantizing stored K,V tensors while keeping attention computation in a compute-friendly format.</p>
+
 	</article>
 
 	<article class="post-card">
 		<p class="post-card-date">20 May 2026</p>
 		<h2><a href="/blog/2026/05/20/hicache" title="HiCache">HiCache</a></h2>
+
+		<p class="post-card-description">How SGLang extends RadixAttention with CPU-side hierarchical cache to reuse long prefixes beyond limited GPU memory.</p>
+
 	</article>
 
 	<article class="post-card">
 		<p class="post-card-date">19 May 2026</p>
 		<h2><a href="/blog/2026/05/19/radixattention" title="RadixAttention">RadixAttention</a></h2>
+
+		<p class="post-card-description">How SGLang shares KV cache across requests through a radix tree over common prompt prefixes.</p>
+
 	</article>
 
 	<article class="post-card">
 		<p class="post-card-date">12 Feb 2026</p>
 		<h2><a href="/blog/2026/02/12/pre-norm-vs-post-norm" title="Pre-norm vs Post-norm">Pre-norm vs Post-norm</a></h2>
+
+		<p class="post-card-description">Why modern LLMs prefer pre-norm residual blocks, and how that changes gradient flow compared with post-norm.</p>
+
 	</article>
 
 	<article class="post-card">
 		<p class="post-card-date">12 Feb 2026</p>
 		<h2><a href="/blog/2026/02/12/layernorm-vs-rmsnorm-what-s-different" title="LayerNorm vs RMSNorm: What’s different?">LayerNorm vs RMSNorm: What’s different?</a></h2>
+
+		<p class="post-card-description">A practical comparison of LayerNorm and RMSNorm: what they normalize, what they skip, and why RMSNorm is common in LLMs.</p>
+
 	</article>
 
 	<article class="post-card">
 		<p class="post-card-date">12 Feb 2026</p>
 		<h2><a href="/blog/2026/02/12/flashattention-4-all-together-tiling-fusing" title="FlashAttention(4): All-together: tiling&fusing">FlashAttention(4): All-together: tiling&fusing</a></h2>
+
+		<p class="post-card-description">How FlashAttention combines tiling, online softmax, and kernel fusion to avoid materializing the full attention matrix.</p>
+
 	</article>
 
 	<article class="post-card">
 		<p class="post-card-date">12 Feb 2026</p>
 		<h2><a href="/blog/2026/02/12/flashattention-3-online-softmax" title="FlashAttention(3): Online Softmax">FlashAttention(3): Online Softmax</a></h2>
+
+		<p class="post-card-description">How online softmax computes exact softmax block by block using running max and normalization terms.</p>
+
 	</article>
 
 	<article class="post-card">
 		<p class="post-card-date">12 Feb 2026</p>
 		<h2><a href="/blog/2026/02/12/flashattention-2-the-native-attention-and-its-constraints" title="FlashAttention(2): The native attention and its constraints">FlashAttention(2): The native attention and its constraints</a></h2>
+
+		<p class="post-card-description">Why standard attention becomes memory-bound, and how the full attention score matrix creates the bottleneck.</p>
+
 	</article>
 
 	<article class="post-card">
 		<p class="post-card-date">12 Feb 2026</p>
 		<h2><a href="/blog/2026/02/12/flashattention-1-what-it-is-and-why-we-need-it" title="FlashAttention(1): What it is and why we need it">FlashAttention(1): What it is and why we need it</a></h2>
+
+		<p class="post-card-description">The motivation for FlashAttention: reducing attention memory traffic by keeping intermediate blocks on chip.</p>
+
 	</article>
 
 </section>

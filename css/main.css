@@ -268,6 +268,13 @@ pre code {
     color: var(--link-hover);
 }
 
+.home-post-excerpt {
+    margin: 0.45rem 0 0;
+    color: var(--muted);
+    font-size: 0.94rem;
+    line-height: 1.55;
+}
+
 .button-link {
     display: inline-block;
     margin-top: 0.8rem;
@@ -346,6 +353,13 @@ pre code {
 
 .post-card h2 a:hover {
     color: var(--link-hover);
+}
+
+.post-card-description {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.98rem;
+    line-height: 1.55;
 }
 
 .post-card p:last-child {
