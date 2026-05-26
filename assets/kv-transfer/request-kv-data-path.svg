@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1040" viewBox="0 0 900 1040" role="img" aria-labelledby="title desc">
+  <title id="title">Request path and KV data path</title>
+  <desc id="desc">A vertical diagram separating scheduler metadata movement from KV block transfer.</desc>
+  <defs>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-orange" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#c2410c"/>
+    </marker>
+    <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#0f172a" flood-opacity="0.10"/>
+    </filter>
+    <style>
+      .bg { fill: #fbfdff; }
+      .panel { fill: #dbeafe; opacity: 0.58; }
+      .lane-blue { fill: #bfdbfe; fill-opacity: 0.34; stroke: #60a5fa; }
+      .lane-orange { fill: #fed7aa; fill-opacity: 0.24; stroke: #fb923c; }
+      .title { font: 700 30px Inter, Arial, sans-serif; fill: #173153; }
+      .subtitle { font: 600 18px Inter, Arial, sans-serif; fill: #57749b; }
+      .lane-title-blue { font: 700 22px Inter, Arial, sans-serif; fill: #1d4ed8; }
+      .lane-title-orange { font: 700 22px Inter, Arial, sans-serif; fill: #b45309; }
+      .box { fill: #dbeafe; fill-opacity: 0.32; stroke-width: 2.2; filter: url(#soft-shadow); }
+      .box-blue { stroke: #3b82f6; }
+      .box-orange { stroke: #ea7a3c; }
+      .box-neutral { fill: #dbeafe; stroke: #93c5fd; }
+      .box-title { font: 700 18px Inter, Arial, sans-serif; fill: #1e3657; }
+      .box-text { font: 500 14px Inter, Arial, sans-serif; fill: #33537a; }
+      .small { font: 700 13px Inter, Arial, sans-serif; fill: #557098; }
+      .blue-line { fill: none; stroke: #2563eb; stroke-width: 3; marker-end: url(#arrow-blue); }
+      .orange-line { fill: none; stroke: #b94b3f; stroke-width: 3.2; marker-end: url(#arrow-orange); }
+      .dashed { stroke-dasharray: 8 7; }
+      .label-blue { fill: #bfdbfe; stroke: #93c5fd; }
+      .label-orange { fill: #f2ded0; stroke: #e2a174; }
+      .label-text-blue { font: 700 14px Inter, Arial, sans-serif; fill: #1d4ed8; }
+      .label-text-orange { font: 700 14px Inter, Arial, sans-serif; fill: #a44436; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="18" y="18" width="864" height="1004" rx="28"/>
+  <rect class="panel" x="40" y="44" width="820" height="952" rx="28"/>
+  <text class="title" x="80" y="88">Request Path vs KV Data Path</text>
+  <text class="subtitle" x="80" y="118">Scheduler/control plane moves decisions and metadata; transfer/data plane moves KV bytes.</text>
+
+  <rect class="lane-blue" x="80" y="155" width="350" height="780" rx="22"/>
+  <rect class="lane-orange" x="490" y="155" width="350" height="780" rx="22"/>
+  <text class="lane-title-blue" x="116" y="200">Control plane</text>
+  <text class="lane-title-orange" x="526" y="200">Data plane</text>
+
+  <rect class="box box-blue" x="125" y="235" width="260" height="78" rx="14"/>
+  <text class="box-title" x="255" y="268" text-anchor="middle">User request</text>
+  <text class="box-text" x="255" y="292" text-anchor="middle">prompt + sampling state</text>
+
+  <path class="blue-line" d="M255 313 L255 356"/>
+  <rect class="box box-blue" x="125" y="357" width="260" height="82" rx="14"/>
+  <text class="box-title" x="255" y="391" text-anchor="middle">Global router</text>
+  <text class="box-text" x="255" y="415" text-anchor="middle">assign request ownership</text>
+
+  <path class="blue-line" d="M255 439 L255 480"/>
+  <rect class="box box-blue" x="125" y="481" width="260" height="84" rx="14"/>
+  <text class="box-title" x="255" y="515" text-anchor="middle">Prefill scheduler</text>
+  <text class="box-text" x="255" y="539" text-anchor="middle">choose prefill worker</text>
+
+  <path class="blue-line" d="M255 565 L255 606"/>
+  <rect class="box box-blue" x="125" y="607" width="260" height="86" rx="14"/>
+  <text class="box-title" x="255" y="641" text-anchor="middle">KV metadata manager</text>
+  <text class="box-text" x="255" y="665" text-anchor="middle">block ids, location, lifetime</text>
+
+  <path class="blue-line" d="M255 693 L255 734"/>
+  <rect class="box box-blue" x="125" y="735" width="260" height="84" rx="14"/>
+  <text class="box-title" x="255" y="769" text-anchor="middle">Decode scheduler</text>
+  <text class="box-text" x="255" y="793" text-anchor="middle">choose decode worker</text>
+
+  <path class="blue-line dashed" d="M385 398 C445 398 445 294 534 274"/>
+  <path class="blue-line dashed" d="M385 650 C450 650 444 831 535 846"/>
+  <path class="blue-line dashed" d="M385 777 C452 777 460 842 535 842"/>
+  <rect class="label-blue" x="288" y="571" width="112" height="30" rx="15"/>
+  <text class="label-text-blue" x="344" y="591" text-anchor="middle">metadata</text>
+
+  <rect class="box box-orange" x="530" y="235" width="260" height="86" rx="14"/>
+  <text class="box-title" x="660" y="268" text-anchor="middle">Prefill worker</text>
+  <text class="box-text" x="660" y="292" text-anchor="middle">produces KV blocks</text>
+
+  <path class="orange-line" d="M660 321 L660 374"/>
+  <rect class="box box-orange" x="530" y="375" width="260" height="90" rx="14"/>
+  <text class="box-title" x="660" y="408" text-anchor="middle">KV block store</text>
+  <text class="box-text" x="660" y="432" text-anchor="middle">GPU/NPU memory ownership</text>
+
+  <path class="orange-line" d="M660 465 L660 518"/>
+  <rect class="label-orange" x="575" y="487" width="170" height="32" rx="16"/>
+  <text class="label-text-orange" x="660" y="509" text-anchor="middle">KV bytes, not decisions</text>
+  <rect class="box box-orange" x="530" y="519" width="260" height="90" rx="14"/>
+  <text class="box-title" x="660" y="552" text-anchor="middle">Transfer backend</text>
+  <text class="box-text" x="660" y="576" text-anchor="middle">RDMA, UCX, NIXL, Mooncake</text>
+
+  <path class="orange-line" d="M660 609 L660 662"/>
+  <rect class="box box-orange" x="530" y="663" width="260" height="90" rx="14"/>
+  <text class="box-title" x="660" y="696" text-anchor="middle">Expose / move blocks</text>
+  <text class="box-text" x="660" y="720" text-anchor="middle">actual KV bytes cross boundary</text>
+
+  <path class="orange-line" d="M660 753 L660 806"/>
+  <rect class="box box-orange" x="530" y="807" width="260" height="90" rx="14"/>
+  <text class="box-title" x="660" y="840" text-anchor="middle">Decode worker</text>
+  <text class="box-text" x="660" y="864" text-anchor="middle">continues generation with KV</text>
+
+  <rect class="box box-neutral" x="150" y="900" width="600" height="66" rx="16"/>
+  <text class="box-title" x="450" y="930" text-anchor="middle">Mental boundary</text>
+  <text class="small" x="450" y="954" text-anchor="middle">scheduler decides where work runs; KV transfer makes the data dependency executable</text>
+</svg>
