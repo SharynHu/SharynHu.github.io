@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>Multi-head Latent Attention | Sharyn Hu</title>
+		<link rel="stylesheet" type="text/css" href="/css/main.css">
+		<link rel="stylesheet" href="/css/syntax.css">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" integrity="sha512-tN7Ec6zAFaVSG3TpNAKtk4DOHNpSwKHxxrsiw4GHKESGPs5njn/0sMCUMl2svV4wo4BK/rCP7juYz+zx+l6oeQ==" crossorigin="anonymous" referrerpolicy="no-referrer">
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js" integrity="sha512-7Z9J3l1+EYfeaPKcGXu3MS/7T+w19WtKQY/n+xzmw4hZhJ9tyYmcUS+4QqAlzhicE5LAfMQSF3iFTK9bQdTxXg==" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+		<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+		<script type="text/x-mathjax-config">
+			MathJax.Hub.Config({
+				tex2jax: {
+					skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+					inlineMath: [['$','$']]
+				}
+			});
+		</script>
+	</head>
+	<body>
+
+			<header class="site-header">
+				<a class="site-title" href="/">Sharyn Hu</a>
+				<p class="site-tagline">Notes on computer science, systems, and machine learning.</p>
+				<nav class="site-nav">
+					<a href="/">Home</a>
+					<a href="/blog">Blog</a>
+				</nav>
+			</header>
+
+
+		<main class="container">
+			<article class="post">
+	<header class="post-header">
+		<p class="meta">03 Jun 2026</p>
+		<h1 class="post-title">Multi-head Latent Attention</h1>
+		<nav class="language-switch" aria-label="Post language"><span class="language-option is-active" aria-current="true">English</span><a class="language-option" href="/blog/2026/06/03/multi-head-latent-attention-zh">中文</a></nav>
+	</header>
+	<article class="page sans" id="multi-head-latent-attention">
+  <div class="page-body">
+    <p>MLA (<strong>Multi-head Latent Attention</strong>) is the attention mechanism introduced by DeepSeek in DeepSeek-V2 and refined in V3. It is designed to solve one specific problem: <strong>the KV cache is too big</strong>.</p>
+
+    <h1>The problem MLA solves</h1>
+    <p>For autoregressive inference, every past token's $K$ and $V$ vectors need to be kept in memory so future tokens can attend to them. For a model with $L$ layers, $h$ heads, and head dimension $d_h$:</p>
+
+    <div class="math-display">
+\[
+\text{KV cache per token} = 2 \times L \times h \times d_h
+\]
+    </div>
+
+    <p>The factor of 2 is for $K$ and $V$. For a large model with long context, this dominates GPU memory and memory bandwidth.</p>
+    <p><strong>Every decoding step has to read the existing KV cache from HBM to compute attention.</strong> Larger cache means more HBM traffic, which slows decoding and limits batch size.</p>
+
+    <p>Several techniques attack this problem:</p>
+    <ul>
+      <li><strong>MQA (Multi-Query Attention):</strong> all heads share one $K$ and one $V$. It gives the smallest KV cache, but can lose head-specific capacity.</li>
+      <li><strong>GQA (Grouped-Query Attention):</strong> heads are divided into groups, and each group shares $K$ and $V$. It trades more cache than MQA for better quality.</li>
+      <li><strong>MLA:</strong> compresses $K$ and $V$ into a learned low-rank latent, then lets each head recover head-specific behavior through learned projections. Its value is <strong>small cache with much stronger quality than simple sharing</strong>.</li>
+    </ul>
+
+    <h1>The core idea: low-rank joint compression of K and V</h1>
+    <p>Instead of storing $K$ and $V$ per head, MLA stores one small latent vector $c_{kv}$ per token. From that latent, the model can reconstruct head-specific $K$ and $V$ behavior when needed.</p>
+
+    <ul>
+      <li><strong>Standard MHA per token:</strong> $K = x \times W_K$, $V = x \times W_V$
+        <ul>
+          <li>Total cache per token per layer: $2 \times h \times d_h$</li>
+        </ul>
+      </li>
+      <li><strong>MLA per token:</strong> $c_{kv} = x \times W_{DKV}$
+        <ul>
+          <li>Shape: $(d_c,)$ where $d_c \ll h \times d_h$</li>
+          <li>$K = c_{kv} \times W_{UK}$, shape $(h \times d_h)$, not stored as full cache</li>
+          <li>$V = c_{kv} \times W_{UV}$, shape $(h \times d_h)$, not stored as full cache</li>
+          <li>Cache before adding the decoupled RoPE path: $d_c$; in DeepSeek's final design, cache becomes $d_c + d_h^R$.</li>
+        </ul>
+      </li>
+    </ul>
+
+    <p>$W_{DKV}$ is the down-projection that compresses into the latent. $W_{UK}$ and $W_{UV}$ are up-projections that recover head-specific key/value behavior from that latent.</p>
+    <p>DeepSeek-V2 uses $d_c = 512$ and a decoupled RoPE key dimension $d_h^R = 64$. The final cached state is $d_c + d_h^R = 576$ elements per token per layer, compared with standard MHA's $2 \times h \times d_h = 32768$ for $h=128, d_h=128$. That is about <strong>57x less KV cache than MHA</strong>.</p>
+
+    <figure>
+      <img src="/assets/multi-head-latent-attention/mla-training-architecture.svg" alt="Training-time MLA architecture showing c_kv latent cache, per-head content K and V reconstruction, and a small RoPE key path">
+      <figcaption>Training-time view: MLA learns a shared latent cache and per-head projections that recover content-specific attention behavior.</figcaption>
+    </figure>
+
+    <h1>Why this preserves head diversity better than MQA/GQA</h1>
+    <p>MQA forces all heads to share the same $K$ and $V$, and GQA shares them within each group. That reduces cache by reducing head diversity.</p>
+    <p>MLA is different: the cache is shared, but each head still gets head-specific $K$ and $V$ behavior through learned up-projections from $c_{kv}$.</p>
+
+    <p><mark class="highlight-pink_background"><strong>The latent $c_{kv}$ is a compressed representation that preserves enough information for each head's up-projection to recover its own distinct $K$ and $V$ behavior.</strong></mark> <mark class="highlight-yellow_background"><strong>The compression is learned jointly with the model, so it captures the information the heads actually need.</strong></mark></p>
+
+    <aside class="callout">
+      <div>
+        <p><strong>Mental model</strong></p>
+        <ul>
+          <li>MQA is one shared sauce for every head.</li>
+          <li>MLA is one concentrated stock; each head uses its own learned projection to turn it into the flavor it needs.</li>
+        </ul>
+      </div>
+    </aside>
+
+    <h1>The absorption trick: avoid materializing full K/V cache</h1>
+    <p>The clever part is that the full reconstructed keys do not need to be materialized for every cached token during inference.</p>
+
+    <p>In standard attention, the score path would look like:</p>
+    <div class="math-display">
+\[
+\text{score} = QK^T = xW_Q W_{UK}^T c_{kv}^T
+\]
+    </div>
+
+    <p>Since $W_{UK}$ is fixed, it can be pre-multiplied into the query projection:</p>
+    <div class="math-display">
+\[
+W_{Q\_absorbed} = W_Q W_{UK}^T
+\]
+    </div>
+
+    <div class="math-display">
+\[
+Q' = x W_{Q\_absorbed}, \qquad \text{score} = Q' c_{kv}^T
+\]
+    </div>
+
+    <p>So at inference time, <strong>you do not need to materialize full reconstructed $K$ for every cached token</strong>. The query-side projection can be arranged so attention scores are computed against the latent cache directly.</p>
+
+    <p>The value side is similar in spirit but not identical algebraically: attention first aggregates over the compressed latent cache, then the value-side up-projection is applied before the output projection. The system still uses the learned up-projection weights, but it avoids storing and reading the full per-head $K$/$V$ cache.</p>
+
+    <p><strong>Net effect:</strong> MLA trades a small amount of projection compute for a much smaller KV cache and much less HBM traffic during decoding.</p>
+
+    <h1>The RoPE problem and the decoupled design</h1>
+    <p>MLA compresses $K$ and $V$ into a small latent vector $c_{kv}$ per token, dramatically reducing KV cache size. However, $c_{kv}$ only stores content. To get the full content key, the model would reconstruct it via:</p>
+    <div class="math-display">
+\[
+K = c_{kv} \times W_{UK}
+\]
+    </div>
+
+    <p>The absorption trick avoids materializing those full reconstructed keys in the attention path by pre-merging $W_{UK}$ into $W_Q$, allowing the model to attend directly to $c_{kv}$ without storing full per-head keys.</p>
+    <p>But <strong>RoPE breaks absorption</strong>: RoPE rotates $K$ by a position-dependent matrix $R(j)$ after reconstruction, and each cached token has a different $R(j)$.</p>
+
+    <div class="math-display">
+\[
+K_{rotated} = R(j) \times K
+\]
+    </div>
+
+    <p>The decoupled design solves this by splitting $K$ into two paths:</p>
+    <ul>
+      <li><strong>Position-independent content path:</strong> large, derived from $c_{kv}$, no RoPE, absorption-friendly.</li>
+      <li><strong>Position-dependent RoPE path:</strong> small, stores $K_{rope}$ with position encoding.</li>
+    </ul>
+
+    <pre class="code code-wrap language-plaintext"><code class="language-plaintext">Position-independent path:
+c_kv    = x * W_DKV      # compressed latent, small, stored in cache
+K_nope  = c_kv * W_UK    # content key; not stored as full KV cache at inference
+
+Position-dependent path:
+K_rope  = RoPE(x * W_KR) # small extra key vector with RoPE applied</code></pre>
+
+    <p>Each token's cache now holds two things: the compressed latent $c_{kv}$ and a shared $K_{rope}$.</p>
+    <div class="math-display">
+\[
+\text{score} = Q_{nope}K_{nope} + Q_{rope}K_{rope}
+\]
+    </div>
+
+    <figure>
+      <img src="/assets/multi-head-latent-attention/mla-decoupled-rope.svg" alt="Decoupled RoPE design showing a position-free content path and a small RoPE key path">
+      <figcaption>Decoupled RoPE keeps the large content path absorption-friendly and isolates position information in a small cached key.</figcaption>
+    </figure>
+
+    <p>The no-RoPE path gets absorbed. The RoPE path is small and shared across heads, so the total cache is still dramatically smaller than standard MHA.</p>
+
+    <figure>
+      <img src="/assets/multi-head-latent-attention/mla-inference-absorbed.svg" alt="Inference-time MLA computation showing cached c_kv and K_rope, absorbed query scoring, and value-side projection after latent aggregation">
+      <figcaption>Inference-time view: attention works over the latent cache instead of storing full per-head K/V tensors.</figcaption>
+    </figure>
+
+    <h1>The numbers for DeepSeek-V2</h1>
+    <p><strong>Cached, shared across all heads:</strong></p>
+    <ul>
+      <li>$c_{kv}$: one per token, same for every head</li>
+      <li>$K_{rope}$: one per token, same for every head</li>
+    </ul>
+
+    <p><strong>Per-head, different for each head:</strong></p>
+    <ul>
+      <li>$W_{UK}^h$: each head has its own up-projection to reconstruct its own $K_{nope}$ from the shared $c_{kv}$</li>
+      <li>$W_{UV}^h$: each head has its own up-projection to reconstruct its own $V$ from the shared $c_{kv}$</li>
+    </ul>
+
+    <p>So at attention time for head $h$:</p>
+    <ul>
+      <li>$K_{nope}^h = c_{kv} \times W_{UK}^h$</li>
+      <li>$V^h = c_{kv} \times W_{UV}^h$</li>
+      <li>$K_{rope}$ is the same for all heads</li>
+      <li>$\text{score}^h = Q_{nope}^h \times K_{nope}^h + Q_{rope}^h \times K_{rope}$</li>
+    </ul>
+
+    <p>Different heads see different $K_{nope}$ and $V$, but they all attend to the same $K_{rope}$. This makes sense: $K_{rope}$ only carries position information, while the per-head content relevance lives in the projected latent path.</p>
+
+    <pre class="code code-wrap language-plaintext"><code class="language-plaintext">MLA cache:
+  c_kv:    512  (shared, carries content for all heads)
+  K_rope:   64  (shared, carries position)
+  total:   576  (regardless of number of heads)
+
+MHA cache:
+  K + V: 2 * 128 heads * 128 dim = 32768
+
+MQA cache:
+  K + V: 2 * 128 dim = 256
+
+GQA cache:
+  K + V: 2 * n_g * 128
+  MLA is cache-equivalent to GQA with n_g = 576 / 256 = 2.25 groups.</code></pre>
+
+    <p>This is the key insight of MLA: <strong>head diversity comes from the per-head up-projections, not from the cache</strong>. The cache only stores shared representations; the per-head specialization is a compute-time operation, not a storage-time cost.</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>MHA</th>
+          <th>MQA</th>
+          <th>GQA</th>
+          <th>MLA</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>KV cache per token per layer</td>
+          <td><code>2 * h * d_h</code></td>
+          <td><code>2 * d_h</code></td>
+          <td><code>2 * g * d_h</code></td>
+          <td><code>d_c + d_h^R</code></td>
+        </tr>
+        <tr>
+          <td>DeepSeek-V2 example</td>
+          <td><code>2 * 128 * 128 = 32768</code></td>
+          <td><code>256</code></td>
+          <td><code>256 * g</code></td>
+          <td><code>576</code></td>
+        </tr>
+        <tr>
+          <td>Main tradeoff</td>
+          <td>Full per-head K/V capacity</td>
+          <td>Smallest cache, weakest head diversity</td>
+          <td>Group-level sharing</td>
+          <td>Small cache plus head-specific reconstruction</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>So MLA is <strong>not smaller than pure MQA</strong>. MQA still has the smallest raw cache. MLA's advantage is that it compresses KV cache to roughly a tiny-GQA size while retaining much stronger head-specific expressiveness. DeepSeek reports in its ablations that MLA outperforms its MHA baseline while using a fraction of the KV cache.</p>
+
+    <h1>Summary table</h1>
+    <table>
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>KV cache per token</th>
+          <th>Quality</th>
+          <th>How heads differ</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>MHA</td>
+          <td><code>2 * h * d_h</code></td>
+          <td>Baseline</td>
+          <td>Each head has its own K and V</td>
+        </tr>
+        <tr>
+          <td>MQA</td>
+          <td><code>2 * d_h</code></td>
+          <td>Can degrade</td>
+          <td>All heads share the same K and V</td>
+        </tr>
+        <tr>
+          <td>GQA</td>
+          <td><code>2 * g * d_h</code></td>
+          <td>Better than MQA, usually below MHA</td>
+          <td>Groups share K and V</td>
+        </tr>
+        <tr>
+          <td><strong>MLA</strong></td>
+          <td><code>d_c + d_h^R</code></td>
+          <td>DeepSeek reports stronger than its MHA baseline</td>
+          <td>Each head derives K/V behavior from a shared latent</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h1>Why this matters for serving</h1>
+    <p>For LLM inference, the KV cache is often the bottleneck for:</p>
+    <ol>
+      <li><strong>Batch size:</strong> how many concurrent requests you can serve.</li>
+      <li><strong>Context length:</strong> how long a single request can be.</li>
+      <li><strong>Decoding speed:</strong> how fast tokens can be generated when HBM reads dominate.</li>
+    </ol>
+
+    <p>MLA reduces KV-cache pressure by about 57x versus standard MHA in the DeepSeek-V2 configuration, which can improve all three: larger batches, longer contexts, and lower decode-time HBM traffic. The realized serving gain still depends on the full system: MoE routing, kernels, quantization, batching, hardware, and memory layout.</p>
+
+    <p>This is why MLA matters for serving efficiency: it is an architecture-level change that attacks KV-cache memory directly while preserving model quality in DeepSeek's reported ablations.</p>
+  </div>
+</article>
+
+</article>
+
+		</main>
+
+
+		<style>
+			html body {
+				max-width: none !important;
+				margin: 0 !important;
+				padding: 0 24px !important;
+				color: var(--text) !important;
+				background: var(--bg) !important;
+				white-space: normal !important;
+			}
+
+			.site-header,
+			.container,
+			.site-footer {
+				max-width: 1120px !important;
+				margin-left: auto !important;
+				margin-right: auto !important;
+			}
+
+			.site-header {
+				background: var(--header-bg) !important;
+				box-shadow: 0 0 0 100vmax var(--header-bg) !important;
+				clip-path: inset(0 -100vmax) !important;
+			}
+
+			.site-header a,
+			.site-nav a,
+			.site-footer a {
+				text-decoration: none !important;
+			}
+
+			.post {
+				max-width: 1040px !important;
+				padding: 34px 40px 46px !important;
+				border: 1px solid var(--github-border) !important;
+				border-radius: 6px !important;
+				background: var(--surface) !important;
+				color: var(--github-text) !important;
+			}
+
+			.post-header {
+				margin-bottom: 2.25rem !important;
+				text-align: left !important;
+			}
+
+			.post-title {
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 2rem !important;
+				font-weight: 600 !important;
+				line-height: 1.2 !important;
+			}
+
+			.post .page,
+			.post .page-body {
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 16px !important;
+				line-height: 1.65 !important;
+				text-align: left !important;
+				white-space: normal !important;
+			}
+
+			.post .page-body {
+				counter-reset: section;
+			}
+
+			.post .page p,
+			.post .page li,
+			.post .page .collection-content,
+			.post .page .simple-table,
+			.post .page .table_of_contents-item,
+			.post .page .bookmark-title,
+			.post .page .bookmark-description,
+			.post .page .bookmark-href {
+				color: var(--github-text) !important;
+				font-size: 1rem !important;
+				line-height: 1.65 !important;
+			}
+
+
+			.language-switch {
+				display: inline-flex !important;
+				gap: 4px !important;
+				margin-top: 1rem !important;
+				padding: 3px !important;
+				border: 1px solid var(--github-border) !important;
+				border-radius: 999px !important;
+				background: var(--github-bg) !important;
+				font-family: var(--sans) !important;
+			}
+
+			.language-option {
+				display: inline-flex !important;
+				align-items: center !important;
+				min-height: 30px !important;
+				padding: 0.25rem 0.8rem !important;
+				border-radius: 999px !important;
+				color: var(--github-muted) !important;
+				font-size: 0.78rem !important;
+				font-weight: 700 !important;
+				letter-spacing: 0.04em !important;
+				line-height: 1 !important;
+				text-decoration: none !important;
+			}
+
+			.language-option:hover {
+				color: var(--github-text) !important;
+				text-decoration: none !important;
+			}
+
+			.language-option.is-active {
+				background: var(--surface) !important;
+				color: var(--github-text) !important;
+				box-shadow: 0 1px 2px rgba(31, 35, 40, 0.08) !important;
+			}
+
+			.language-option.is-disabled {
+				color: #8c959f !important;
+				cursor: not-allowed !important;
+			}
+
+
+			.translation-note {
+				margin: 1.5rem 0 0 !important;
+				padding: 1.1rem 1.25rem !important;
+				border: 1px solid var(--github-border) !important;
+				border-left: 4px solid #0969da !important;
+				border-radius: 6px !important;
+				background: var(--github-bg) !important;
+			}
+
+			.translation-note .eyebrow {
+				margin-bottom: 0.55rem !important;
+				color: var(--github-muted) !important;
+				font-size: 0.78rem !important;
+				font-weight: 700 !important;
+				letter-spacing: 0.08em !important;
+				text-transform: uppercase !important;
+			}
+
+			.translation-note p:last-child {
+				margin-bottom: 0 !important;
+			}
+
+			.post .page h1 {
+				counter-increment: section;
+				counter-reset: subsection;
+				margin: 2rem 0 1rem !important;
+				padding-bottom: 0.35rem !important;
+				border-bottom: 1px solid var(--github-border) !important;
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 1.55rem !important;
+				font-weight: 600 !important;
+				line-height: 1.3 !important;
+			}
+
+			.post .page h1::before {
+				content: counter(section) ". ";
+				color: var(--github-muted);
+			}
+
+			.post .page h2 {
+				counter-increment: subsection;
+				counter-reset: subsubsection;
+				margin: 1.6rem 0 0.8rem !important;
+				padding-bottom: 0.25rem !important;
+				border-bottom: 1px solid var(--github-border) !important;
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 1.25rem !important;
+				font-weight: 600 !important;
+				line-height: 1.35 !important;
+			}
+
+			.post .page h2::before {
+				content: counter(section) "." counter(subsection) " ";
+				color: var(--github-muted);
+			}
+
+			.post .page h3 {
+				counter-increment: subsubsection;
+				margin: 1.35rem 0 0.65rem !important;
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 1.1rem !important;
+				font-weight: 600 !important;
+				line-height: 1.35 !important;
+			}
+
+			.post .page h3::before {
+				content: counter(section) "." counter(subsection) "." counter(subsubsection) " ";
+				color: var(--github-muted);
+			}
+
+			.post .page :not(pre) > code {
+				padding: 0.2em 0.4em !important;
+				border-radius: 6px !important;
+				background: rgba(175, 184, 193, 0.2) !important;
+				color: black !important;
+			}
+
+			.post .page pre.code,
+			.post .page pre.code.code-wrap {
+				overflow-x: auto !important;
+				padding: 1.25em 1em !important;
+				border: 1px solid var(--github-border) !important;
+				border-radius: 6px !important;
+				background: var(--github-bg) !important;
+				white-space: pre !important;
+				word-break: normal !important;
+			}
+
+			.post .page pre.code code {
+				color: #37352f !important;
+				white-space: pre !important;
+				word-break: normal !important;
+			}
+
+			.post .page table {
+				width: 100% !important;
+				border-collapse: collapse !important;
+			}
+
+			.post .page th,
+			.post .page td {
+				border: 1px solid var(--github-border) !important;
+				padding: 0.45rem 0.65rem !important;
+			}
+
+			.post .page th {
+				background: var(--github-bg) !important;
+				font-weight: 600 !important;
+			}
+
+			.post .page a {
+				color: #0969da !important;
+			}
+
+			.post .page a:hover {
+				text-decoration: underline !important;
+			}
+
+			.post .page .highlight-gray_background {
+				background: rgba(42, 28, 0, 0.07) !important;
+			}
+
+			.post .page .highlight-brown_background {
+				background: rgba(139, 46, 0, 0.086) !important;
+			}
+
+			.post .page .highlight-orange_background {
+				background: rgba(224, 101, 1, 0.129) !important;
+			}
+
+			.post .page .highlight-yellow_background {
+				background: rgba(211, 168, 0, 0.137) !important;
+			}
+
+			.post .page .highlight-teal_background {
+				background: rgba(0, 100, 45, 0.09) !important;
+			}
+
+			.post .page .highlight-blue_background {
+				background: rgba(0, 124, 215, 0.094) !important;
+			}
+
+			.post .page .highlight-purple_background {
+				background: rgba(102, 0, 178, 0.078) !important;
+			}
+
+			.post .page .highlight-pink_background {
+				background: rgba(197, 0, 93, 0.086) !important;
+			}
+
+			.post .page .highlight-red_background {
+				background: rgba(223, 22, 0, 0.094) !important;
+			}
+
+			.post .page .callout {
+				display: flex !important;
+				gap: 0.75rem !important;
+				margin: 1rem 0 !important;
+				padding: 0.8rem 1rem !important;
+				border: 1px solid var(--github-border) !important;
+				border-left: 4px solid #0969da !important;
+				border-radius: 6px !important;
+				background: var(--github-bg) !important;
+				white-space: normal !important;
+			}
+
+			.post .page figure {
+				margin: 1.4rem 0 !important;
+			}
+
+			.post .page .notion-text-equation-token .katex {
+				font-size: 1.12em !important;
+			}
+
+			.post .page .katex-display,
+			.post .page figure.equation .katex {
+				font-size: 1.18em !important;
+			}
+
+			.post .page .equation {
+				overflow-x: auto !important;
+				padding: 0.75rem 0 !important;
+			}
+
+			@media only screen and (max-width: 720px) {
+				.post {
+					padding: 24px 18px 34px !important;
+				}
+			}
+		</style>
+
+		<footer class="site-footer">
+			<a href="mailto:sharynhu826@gmail.com">sharynhu826@gmail.com</a>
+			<a href="https://github.com/SharynHu">github.com/SharynHu</a>
+		</footer>
+	</body>
+</html>

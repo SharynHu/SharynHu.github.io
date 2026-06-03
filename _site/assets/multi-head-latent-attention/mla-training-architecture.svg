@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="520" viewBox="0 0 980 520" role="img" aria-labelledby="title desc">
+  <title id="title">MLA training-time architecture</title>
+  <desc id="desc">Input hidden state is compressed into a latent KV vector, expanded into per-head content keys and values, and paired with a small RoPE key path.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfbfb; }
+      .panel { fill: #ffffff; stroke: #d0d7de; stroke-width: 2; }
+      .latent { fill: #e7f5ef; stroke: #2f7d5c; stroke-width: 2; }
+      .content { fill: #eef4ff; stroke: #3f6fb5; stroke-width: 2; }
+      .rope { fill: #fff3d6; stroke: #b7791f; stroke-width: 2; }
+      .head { fill: #f6f8fa; stroke: #8c959f; stroke-width: 1.5; }
+      .text { fill: #24292f; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 18px; }
+      .small { fill: #57606a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; }
+      .mono { fill: #24292f; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 15px; }
+      .arrow { stroke: #57606a; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#57606a"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="980" height="520"/>
+  <text class="text" x="40" y="44" font-weight="700">Training-time MLA block</text>
+  <text class="small" x="40" y="70">Cache stores the shared latent path plus a small shared RoPE key path.</text>
+
+  <rect class="panel" x="40" y="128" width="150" height="92" rx="8"/>
+  <text class="text" x="78" y="166">hidden</text>
+  <text class="mono" x="82" y="193">x_t</text>
+
+  <rect class="latent" x="270" y="118" width="190" height="112" rx="8"/>
+  <text class="text" x="309" y="154">down-proj</text>
+  <text class="mono" x="306" y="184">c_kv = x_t W_DKV</text>
+  <text class="small" x="311" y="210">cached, 512 dims</text>
+
+  <rect class="content" x="565" y="86" width="220" height="92" rx="8"/>
+  <text class="text" x="600" y="122">content key</text>
+  <text class="mono" x="590" y="150">K_nope^h = c_kv W_UK^h</text>
+
+  <rect class="content" x="565" y="208" width="220" height="92" rx="8"/>
+  <text class="text" x="596" y="244">content value</text>
+  <text class="mono" x="595" y="272">V^h = c_kv W_UV^h</text>
+
+  <rect class="rope" x="270" y="320" width="190" height="94" rx="8"/>
+  <text class="text" x="304" y="356">RoPE path</text>
+  <text class="mono" x="292" y="384">K_rope = RoPE(x_t W_KR)</text>
+  <text class="small" x="317" y="405">cached, 64 dims</text>
+
+  <rect class="head" x="842" y="88" width="116" height="210" rx="8"/>
+  <text class="text" x="867" y="126">heads</text>
+  <text class="small" x="862" y="158">head 0</text>
+  <text class="small" x="862" y="185">head 1</text>
+  <text class="small" x="862" y="212">...</text>
+  <text class="small" x="862" y="239">head 127</text>
+
+  <rect class="panel" x="565" y="340" width="220" height="82" rx="8"/>
+  <text class="text" x="601" y="374">cache per token</text>
+  <text class="mono" x="596" y="400">c_kv + K_rope = 576</text>
+
+  <path class="arrow" d="M190 174 H264"/>
+  <path class="arrow" d="M460 150 H558"/>
+  <path class="arrow" d="M460 196 C500 196 520 254 558 254"/>
+  <path class="arrow" d="M190 190 C225 246 230 368 264 368"/>
+  <path class="arrow" d="M785 132 H835"/>
+  <path class="arrow" d="M785 254 H835"/>
+  <path class="arrow" d="M460 368 H558"/>
+</svg>
