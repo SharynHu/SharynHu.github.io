@@ -1,0 +1,458 @@
+---
+layout: post
+title: "ReAct"
+date: 2026-06-06
+lang: en
+lang_ref: react
+description: "A study note on ReAct: how reasoning traces and actions are interleaved, how the original paper evaluates the method, and why ReAct-style workloads matter for agent serving."
+---
+<article class="page sans" id="react">
+  <div class="page-body">
+    <p><strong>Paper:</strong> <a href="https://arxiv.org/abs/2210.03629">ReAct: Synergizing Reasoning and Acting in Language Models</a></p>
+    <p><strong>Scope:</strong> This note focuses on the original ReAct paper: its problem framing, method, experiments, limitations, and infrastructure implications. Later systems such as Toolformer, ReWOO, LATS, vLLM, SGLang, and DistServe are included only for positioning, not as claims about what the original ReAct paper implemented.</p>
+
+    <h1>Problem</h1>
+    <p>Before ReAct, two relevant directions were usually discussed separately.</p>
+
+    <ol>
+      <li>
+        <p><strong>Chain-of-Thought (CoT):</strong> Question → Reasoning → Answer</p>
+        <p><strong>Example:</strong></p>
+        <ul>
+          <li><strong>Q:</strong> <code>"Roger has 5 apples. He buys 3 more apples. How many apples does he have?"</code></li>
+          <li><strong>Reasoning:</strong> <code>"5 + 3 = 8."</code></li>
+          <li><strong>Answer:</strong> <code>"8 apples."</code></li>
+        </ul>
+        <p>The model reasons from its <strong>internal knowledge</strong>.</p>
+        <aside class="callout">
+          <div>
+            <p><strong>Problem</strong></p>
+            <ul>
+              <li>Knowledge may be outdated.</li>
+              <li>The model cannot interact with external tools or environments.</li>
+              <li>Reasoning traces can hallucinate facts and then propagate those errors.</li>
+            </ul>
+          </div>
+        </aside>
+      </li>
+      <li>
+        <p><strong>Action / Tool Use:</strong> Question → Action → Observation → Action → Answer</p>
+        <p><strong>Example:</strong></p>
+        <ul>
+          <li>Observation: <code>"You are in the kitchen. You see a cabinet, a sink, and a coffee table."</code></li>
+          <li>Action: <code>"open cabinet"</code></li>
+          <li>Observation: <code>"The cabinet contains a mug."</code></li>
+          <li>Action: <code>"take mug"</code></li>
+          <li>Answer: <code>"Task complete."</code></li>
+        </ul>
+        <aside class="callout">
+          <div>
+            <p><strong>Problem</strong></p>
+            <ul>
+              <li>Action-only agents can interact with an environment.</li>
+              <li>But they do not explicitly reason about high-level goals, subgoals, or recovery.</li>
+              <li>They can repeat bad actions when the observation does not match the plan.</li>
+            </ul>
+          </div>
+        </aside>
+      </li>
+    </ol>
+
+    <h1>Motivation</h1>
+    <p>The authors' core observation is simple: humans usually do not separate reasoning from acting.</p>
+    <ul>
+      <li>We reason to decide <strong>what to do next</strong>.</li>
+      <li>We act to collect <strong>new information</strong>.</li>
+      <li>We use the new observation to <strong>update the plan</strong>.</li>
+    </ul>
+    <p>This motivates ReAct: <mark class="highlight-pink_background"><strong>interleave reasoning traces with actions, so reasoning can guide acting and observations can update reasoning.</strong></mark></p>
+
+    <h1>Main Contributions</h1>
+    <p>The paper makes four important contributions.</p>
+    <ol>
+      <li>
+        <p><strong>Reasoning and action are combined into one trajectory.</strong></p>
+        <ul>
+          <li>The model generates reasoning traces and task-specific actions in an interleaved way.</li>
+          <li>This is different from CoT-only reasoning and action-only tool use.</li>
+        </ul>
+      </li>
+      <li>
+        <p><strong>The action space is augmented with language thoughts.</strong></p>
+        <ul>
+          <li>A thought is treated like an internal language action.</li>
+          <li>It does not change the external environment, but it updates the model's context for future reasoning and acting.</li>
+        </ul>
+      </li>
+      <li>
+        <p><strong>ReAct works across different task types.</strong></p>
+        <ul>
+          <li>Knowledge-intensive reasoning: HotpotQA and FEVER.</li>
+          <li>Interactive decision making: ALFWorld and WebShop.</li>
+          <li>The high-level idea stays the same, but the prompt format and action space are task-specific.</li>
+        </ul>
+      </li>
+      <li>
+        <p><strong>The trajectory is interpretable.</strong></p>
+        <ul>
+          <li>Humans can inspect what came from internal reasoning and what came from external observations.</li>
+          <li>This makes failures easier to diagnose than plain answer generation.</li>
+        </ul>
+      </li>
+    </ol>
+
+    <h1>Method</h1>
+    <h2>ReAct Prompt Structure</h2>
+    <p>ReAct uses three kinds of tokens.</p>
+    <ol>
+      <li><strong>Thought:</strong> internal reasoning.
+        <ul>
+          <li>Example: Thought: <code>"I need more information."</code></li>
+        </ul>
+      </li>
+      <li><strong>Action:</strong> command sent to a tool or environment.
+        <ul>
+          <li>Example: Action: <code>"Search[Eiffel Tower]"</code></li>
+        </ul>
+      </li>
+      <li><strong>Observation:</strong> result returned by the tool or environment.
+        <ul>
+          <li>Example: Observation: <code>"The Eiffel Tower is in Paris."</code></li>
+        </ul>
+      </li>
+    </ol>
+    <p>The basic loop is: <strong>Thought → Action → Observation → Thought → Action → Observation</strong>.</p>
+    <aside class="callout">
+      <div>
+        <p><strong>Important nuance</strong></p>
+        <p>Original ReAct is an observation-dependent trajectory method. The next step is conditioned on the accumulated thoughts, actions, and observations. It is not a parallel tree-search algorithm.</p>
+      </div>
+    </aside>
+
+    <h2>Dense vs Sparse Thoughts</h2>
+    <p>This difference comes from the <strong>prompt design</strong>, not from a separately trained task-type classifier.</p>
+    <ol>
+      <li>
+        <p><strong>Model setup</strong></p>
+        <ul>
+          <li>The paper mainly uses a frozen PaLM-540B model with few-shot ReAct examples.</li>
+          <li>The examples show the model what kinds of outputs are allowed: Thought, Action, and Observation.</li>
+          <li>So the model's behavior is induced by in-context trajectories, not by a new MoE routing mechanism.</li>
+        </ul>
+      </li>
+      <li>
+        <p><strong>Knowledge tasks: HotpotQA and FEVER</strong></p>
+        <ul>
+          <li>The authors use prompts where reasoning traces and actions alternate densely.</li>
+          <li>The model is shown a pattern like: Thought → Action → Observation → Thought → Action → Observation.</li>
+          <li>This makes sense because these tasks require repeated evidence lookup and fact checking.</li>
+        </ul>
+      </li>
+      <li>
+        <p><strong>Decision-making tasks: ALFWorld and WebShop</strong></p>
+        <ul>
+          <li>The authors write prompts with sparse reasoning traces.</li>
+          <li>The prompt still gives the model the option to output thoughts, but it does not require a thought before every action.</li>
+          <li>The model then decides when to output a thought versus an action within that prompted format.</li>
+        </ul>
+        <aside class="callout">
+          <div>
+            <p><strong>Precision point</strong></p>
+            <p>In the ReAct paper, sparse thinking is a prompting strategy. It is not evidence that the model was trained to autonomously classify task types and choose a reasoning density from scratch.</p>
+          </div>
+        </aside>
+      </li>
+    </ol>
+
+    <h2>Action Spaces</h2>
+    <p>The action space changes by benchmark.</p>
+    <ol>
+      <li><strong>HotpotQA / FEVER</strong>
+        <ul>
+          <li><code>Search[entity]</code>: retrieve information from a Wikipedia page or similar entities.</li>
+          <li><code>Lookup[string]</code>: find the next sentence containing a string.</li>
+          <li><code>Finish[answer]</code>: return the final answer.</li>
+        </ul>
+      </li>
+      <li><strong>ALFWorld</strong>
+        <ul>
+          <li>Text actions in a simulated household, such as going to a location, opening an object, taking an item, or placing an item.</li>
+        </ul>
+      </li>
+      <li><strong>WebShop</strong>
+        <ul>
+          <li>Web navigation actions such as searching, choosing products, selecting options, and submitting the final product choice.</li>
+        </ul>
+      </li>
+    </ol>
+
+    <h2>Paper Trajectory Example</h2>
+    <p>A real HotpotQA-style ReAct trajectory in the paper works like this:</p>
+    <ul>
+      <li>The question asks which device, besides the Apple Remote, can control the program the Apple Remote was originally designed for.</li>
+      <li>The model first searches for the Apple Remote.</li>
+      <li>The observation points it toward Front Row.</li>
+      <li>The model searches for Front Row, then reformulates the search when the first result is not useful.</li>
+      <li>The later observation identifies keyboard function keys as another control method.</li>
+      <li>The model finishes with that answer.</li>
+    </ul>
+    <p>The important part is not the specific entity. The important part is the <strong>feedback loop</strong>: search result → updated thought → better search → final answer.</p>
+
+    <h1>Experimental Setup</h1>
+    <p>The paper evaluates ReAct on four benchmarks.</p>
+    <ol>
+      <li><strong>HotpotQA</strong>
+        <ul>
+          <li>Multi-hop question answering.</li>
+          <li>The model must retrieve and combine information from multiple Wikipedia facts.</li>
+        </ul>
+      </li>
+      <li><strong>FEVER</strong>
+        <ul>
+          <li>Fact verification.</li>
+          <li>The model predicts whether a claim is supported, refuted, or lacks enough information.</li>
+        </ul>
+      </li>
+      <li><strong>ALFWorld</strong>
+        <ul>
+          <li>Text-based household environment.</li>
+          <li>The model must complete tasks over long action horizons with sparse rewards.</li>
+        </ul>
+      </li>
+      <li><strong>WebShop</strong>
+        <ul>
+          <li>Web shopping environment.</li>
+          <li>The model must navigate product pages and choose an item satisfying a user instruction.</li>
+        </ul>
+      </li>
+    </ol>
+    <p>The main model in the paper is PaLM-540B under few-shot prompting. The authors also run fine-tuning experiments on smaller PaLM models using generated trajectories.</p>
+
+    <h1>Key Results</h1>
+    <p>The paper's results are more nuanced than "ReAct always beats CoT."</p>
+    <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Task</th>
+          <th>Result</th>
+          <th>Takeaway</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>HotpotQA</td>
+          <td>ReAct beats Act-only, but is slightly below CoT in the basic prompting setup. ReAct + CoT-SC performs best.</td>
+          <td>ReAct grounds reasoning with retrieval, but CoT can still be strong when reasoning structure matters.</td>
+        </tr>
+        <tr>
+          <td>FEVER</td>
+          <td>ReAct beats both Act-only and CoT; CoT-SC → ReAct performs best.</td>
+          <td>External evidence is especially useful for fact verification.</td>
+        </tr>
+        <tr>
+          <td>ALFWorld</td>
+          <td>ReAct improves success rate by about 34% absolute over the compared imitation/RL baseline.</td>
+          <td>Sparse reasoning helps long-horizon environment interaction.</td>
+        </tr>
+        <tr>
+          <td>WebShop</td>
+          <td>ReAct improves success rate by about 10% absolute over the compared baseline.</td>
+          <td>Reasoning helps navigate noisy real-world text environments.</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+    <aside class="callout">
+      <div>
+        <p><strong>Result takeaway</strong></p>
+        <p>ReAct's value is not just higher accuracy. Its bigger contribution is showing that reasoning traces and environment actions can improve each other inside the same task-solving trajectory.</p>
+      </div>
+    </aside>
+
+    <h1>Limitations</h1>
+    <p>This section matters for both paper reading and infrastructure design.</p>
+    <ol>
+      <li><strong>Sequential, observation-dependent execution</strong>
+        <ul>
+          <li>In the original ReAct paper, the agent follows a trajectory.</li>
+          <li>The next thought/action depends on the current context and the latest observation.</li>
+          <li>This makes ReAct easy to inspect, but it also creates waiting points.</li>
+        </ul>
+      </li>
+      <li><strong>Tool latency</strong>
+        <ul>
+          <li>Suppose one LLM call takes <code>300 ms</code> and one search call takes <code>500 ms</code>.</li>
+          <li>Five ReAct rounds cost roughly <code>5 × (300 + 500) = 4 seconds</code>.</li>
+          <li>This number is illustrative, but the pattern is real: repeated tool calls add latency.</li>
+        </ul>
+      </li>
+      <li><strong>Context growth</strong>
+        <ul>
+          <li>Every round appends new <code>Thought</code>, <code>Action</code>, and <code>Observation</code> text into the prompt.</li>
+          <li>Longer trajectories mean longer prompts, higher KV cache usage, and more memory pressure.</li>
+        </ul>
+      </li>
+      <li><strong>Many inference calls</strong>
+        <ul>
+          <li>A classic chatbot may turn one user request into one long generation.</li>
+          <li>ReAct can turn one user request into several short generations.</li>
+          <li>This makes the same user task more expensive and harder to schedule.</li>
+        </ul>
+      </li>
+      <li><strong>Reasoning rigidity</strong>
+        <ul>
+          <li>The paper finds that interleaving thoughts, actions, and observations improves grounding.</li>
+          <li>But the structure can also reduce flexibility compared with free-form CoT.</li>
+          <li>One failure mode is repeating previous thoughts or actions instead of recovering.</li>
+        </ul>
+      </li>
+      <li><strong>Search / observation failure</strong>
+        <ul>
+          <li>ReAct depends heavily on whether the tool returns useful information.</li>
+          <li>A bad search result can derail the next reasoning step.</li>
+          <li>The model may need to reformulate the search, but it does not always recover.</li>
+        </ul>
+      </li>
+    </ol>
+    <aside class="callout">
+      <div>
+        <p><strong>Key limitation</strong></p>
+        <p>ReAct reduces hallucination by grounding reasoning in observations, but it pays for that grounding with sequential waiting, prompt growth, and dependence on tool quality.</p>
+      </div>
+    </aside>
+
+    <h1>Infrastructure Implications</h1>
+    <p>ReAct made a now-common agent workload pattern concrete.</p>
+    <ul>
+      <li><strong>Traditional serving:</strong> User → one long generation.</li>
+      <li><strong>Agent serving:</strong> User → short generation → tool call → short generation → tool call → answer.</li>
+    </ul>
+    <p>The workload becomes:</p>
+    <ul>
+      <li><strong>bursty:</strong> many short model calls instead of one continuous generation.</li>
+      <li><strong>asynchronous:</strong> tool calls return at different times.</li>
+      <li><strong>latency-sensitive:</strong> each next reasoning/action step often waits for the previous observation.</li>
+      <li><strong>stateful:</strong> every step depends on the accumulated trajectory.</li>
+      <li><strong>cache-heavy:</strong> repeated calls reuse a growing prefix, so KV cache management matters.</li>
+    </ul>
+    <aside class="callout">
+      <div>
+        <p><strong>Infrastructure takeaway</strong></p>
+        <p>Agent serving is not just longer prompting. It is repeated, stateful, tool-linked inference over a growing trajectory.</p>
+      </div>
+    </aside>
+    <p>Later systems should be described carefully. They address related pressure points, but they are not all direct descendants of ReAct.</p>
+    <ol>
+      <li><strong>vLLM / PagedAttention</strong>
+        <ul>
+          <li>Related pressure point: KV cache memory pressure and fragmentation.</li>
+          <li>Main idea: manage KV cache efficiently with paged memory blocks.</li>
+        </ul>
+      </li>
+      <li><strong>SGLang</strong>
+        <ul>
+          <li>Related pressure point: structured LLM programs, agent control, RAG, and multi-call execution.</li>
+          <li>Main idea: expose program structure to the runtime so it can optimize execution.</li>
+        </ul>
+      </li>
+      <li><strong>DistServe</strong>
+        <ul>
+          <li>Related pressure point: prefill and decode have different bottlenecks and latency goals.</li>
+          <li>Main idea: disaggregate prefill and decode resources.</li>
+        </ul>
+      </li>
+      <li><strong>ReWOO</strong>
+        <ul>
+          <li>Related pressure point: ReAct-style observation-dependent reasoning repeatedly halts for tool responses and re-sends growing prompts.</li>
+          <li>Main idea: plan first, gather evidence with workers, then solve with the collected evidence.</li>
+        </ul>
+      </li>
+      <li><strong>LATS</strong>
+        <ul>
+          <li>Related pressure point: ReAct follows one trajectory and does not search over multiple possible reasoning/action paths.</li>
+          <li>Main idea: expand ReAct-style steps into Monte Carlo tree search.</li>
+        </ul>
+      </li>
+    </ol>
+
+    <h1>Comparison With Nearby Methods</h1>
+    <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Core idea</th>
+          <th>Tool / environment use</th>
+          <th>Execution shape</th>
+          <th>Main limitation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>CoT</td>
+          <td>Generate reasoning before the answer.</td>
+          <td>No external tool by default.</td>
+          <td>One reasoning chain.</td>
+          <td>Can hallucinate unsupported facts.</td>
+        </tr>
+        <tr>
+          <td>Act-only</td>
+          <td>Generate actions from observations.</td>
+          <td>Yes.</td>
+          <td>Observation → Action trajectory.</td>
+          <td>Lacks explicit high-level reasoning.</td>
+        </tr>
+        <tr>
+          <td>ReAct</td>
+          <td>Interleave thoughts, actions, and observations.</td>
+          <td>Yes.</td>
+          <td>Sequential observation-dependent trajectory.</td>
+          <td>Latency, context growth, tool-result dependence.</td>
+        </tr>
+        <tr>
+          <td>Toolformer</td>
+          <td>Train a model to decide when and how to call APIs.</td>
+          <td>Yes, through learned API calls.</td>
+          <td>API calls inserted into language modeling.</td>
+          <td>Requires tool-use data construction and filtering.</td>
+        </tr>
+        <tr>
+          <td>ReWOO</td>
+          <td>Plan first, execute tool calls, then solve.</td>
+          <td>Yes.</td>
+          <td>Plan → Work → Solve.</td>
+          <td>Plan can be wrong before evidence arrives.</td>
+        </tr>
+        <tr>
+          <td>LATS</td>
+          <td>Use tree search over reasoning/action steps.</td>
+          <td>Yes.</td>
+          <td>Search tree over possible trajectories.</td>
+          <td>More expensive than a single trajectory.</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h1>Summary</h1>
+    <ol>
+      <li>ReAct = <strong>Reason + Act</strong>.</li>
+      <li>The core loop is <strong>Thought → Action → Observation</strong>.</li>
+      <li>Original ReAct is a <strong>sequential, observation-dependent trajectory method</strong>, not a tree-search method.</li>
+      <li>ReAct reduces hallucination by grounding reasoning in tool/environment observations.</li>
+      <li>Modern agent-serving research studies the pressure points ReAct makes visible: repeated calls, tool latency, context growth, KV cache pressure, scheduling, and execution structure.</li>
+    </ol>
+
+    <h1>Sources</h1>
+    <ul>
+      <li><a href="https://arxiv.org/abs/2210.03629">ReAct: Synergizing Reasoning and Acting in Language Models</a></li>
+      <li><a href="https://arxiv.org/abs/2302.04761">Toolformer: Language Models Can Teach Themselves to Use Tools</a></li>
+      <li><a href="https://arxiv.org/abs/2305.18323">ReWOO: Decoupling Reasoning from Observations</a></li>
+      <li><a href="https://arxiv.org/abs/2310.04406">Language Agent Tree Search</a></li>
+      <li><a href="https://arxiv.org/abs/2309.06180">vLLM / PagedAttention</a></li>
+      <li><a href="https://arxiv.org/abs/2312.07104">SGLang</a></li>
+      <li><a href="https://arxiv.org/abs/2401.09670">DistServe</a></li>
+    </ul>
+  </div>
+</article>

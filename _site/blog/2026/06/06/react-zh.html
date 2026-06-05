@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>ReAct | Sharyn Hu</title>
+		<link rel="stylesheet" type="text/css" href="/css/main.css">
+		<link rel="stylesheet" href="/css/syntax.css">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" integrity="sha512-tN7Ec6zAFaVSG3TpNAKtk4DOHNpSwKHxxrsiw4GHKESGPs5njn/0sMCUMl2svV4wo4BK/rCP7juYz+zx+l6oeQ==" crossorigin="anonymous" referrerpolicy="no-referrer">
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js" integrity="sha512-7Z9J3l1+EYfeaPKcGXu3MS/7T+w19WtKQY/n+xzmw4hZhJ9tyYmcUS+4QqAlzhicE5LAfMQSF3iFTK9bQdTxXg==" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+		<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+		<script type="text/x-mathjax-config">
+			MathJax.Hub.Config({
+				tex2jax: {
+					skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+					inlineMath: [['$','$']]
+				}
+			});
+		</script>
+	</head>
+	<body>
+		
+			<header class="site-header">
+				<a class="site-title" href="/">Sharyn Hu</a>
+				<p class="site-tagline">Notes on computer science, systems, and machine learning.</p>
+				<nav class="site-nav">
+					<a href="/">Home</a>
+					<a href="/blog">Blog</a>
+				</nav>
+			</header>
+		
+
+		<main class="container">
+			<article class="post">
+	<header class="post-header">
+		<p class="meta">06 Jun 2026</p>
+		<h1 class="post-title">ReAct</h1>
+		<nav class="language-switch" aria-label="Post language"><a class="language-option" href="/blog/2026/06/06/react">English</a><span class="language-option is-active" aria-current="true">中文</span></nav>
+	</header>
+	<article class="page sans" id="react">
+  <div class="page-body">
+    <p><strong>论文：</strong> <a href="https://arxiv.org/abs/2210.03629">ReAct: Synergizing Reasoning and Acting in Language Models</a></p>
+    <p><strong>范围：</strong> 这篇笔记聚焦原始 ReAct 论文：问题背景、方法、实验、局限性，以及对基础设施的影响。Toolformer、ReWOO、LATS、vLLM、SGLang、DistServe 等后续系统只用于定位和对比，不表示原始 ReAct 论文实现了这些系统。</p>
+
+    <h1>问题</h1>
+    <p>在 ReAct 之前，两类相关方向通常是分开讨论的。</p>
+
+    <ol>
+      <li>
+        <p><strong>Chain-of-Thought (CoT)：</strong> Question → Reasoning → Answer</p>
+        <p><strong>示例：</strong></p>
+        <ul>
+          <li><strong>Q：</strong> <code>"Roger has 5 apples. He buys 3 more apples. How many apples does he have?"</code></li>
+          <li><strong>Reasoning：</strong> <code>"5 + 3 = 8."</code></li>
+          <li><strong>Answer：</strong> <code>"8 apples."</code></li>
+        </ul>
+        <p>模型基于自己的<strong>内部知识</strong>进行推理。</p>
+        <aside class="callout">
+          <div>
+            <p><strong>问题</strong></p>
+            <ul>
+              <li>知识可能已经过时。</li>
+              <li>模型不能和外部工具或环境交互。</li>
+              <li>reasoning traces 可能会幻觉事实，并把错误继续传播下去。</li>
+            </ul>
+          </div>
+        </aside>
+      </li>
+      <li>
+        <p><strong>Action / Tool Use：</strong> Question → Action → Observation → Action → Answer</p>
+        <p><strong>示例：</strong></p>
+        <ul>
+          <li>Observation: <code>"You are in the kitchen. You see a cabinet, a sink, and a coffee table."</code></li>
+          <li>Action: <code>"open cabinet"</code></li>
+          <li>Observation: <code>"The cabinet contains a mug."</code></li>
+          <li>Action: <code>"take mug"</code></li>
+          <li>Answer: <code>"Task complete."</code></li>
+        </ul>
+        <aside class="callout">
+          <div>
+            <p><strong>问题</strong></p>
+            <ul>
+              <li>Action-only agents 可以和环境交互。</li>
+              <li>但它们不会显式地推理高层目标、子目标或失败恢复。</li>
+              <li>当 observation 和计划不匹配时，它们可能会重复错误 actions。</li>
+            </ul>
+          </div>
+        </aside>
+      </li>
+    </ol>
+
+    <h1>动机</h1>
+    <p>作者的核心观察很简单：人类通常不会把 reasoning 和 acting 完全分开。</p>
+    <ul>
+      <li>我们通过 reasoning 判断<strong>下一步该做什么</strong>。</li>
+      <li>我们通过 acting 收集<strong>新信息</strong>。</li>
+      <li>我们利用新的 observation <strong>更新计划</strong>。</li>
+    </ul>
+    <p>这就引出了 ReAct：<mark class="highlight-pink_background"><strong>把 reasoning traces 和 actions 交错起来，让 reasoning 指导 acting，也让 observations 更新 reasoning。</strong></mark></p>
+
+    <h1>主要贡献</h1>
+    <p>这篇论文有四个重要贡献。</p>
+    <ol>
+      <li>
+        <p><strong>Reasoning 和 action 被组合到同一条 trajectory 中。</strong></p>
+        <ul>
+          <li>模型以交错方式生成 reasoning traces 和 task-specific actions。</li>
+          <li>这不同于只做 CoT reasoning，也不同于只做 action 的 tool use。</li>
+        </ul>
+      </li>
+      <li>
+        <p><strong>Action space 被扩展，加入了 language thoughts。</strong></p>
+        <ul>
+          <li>thought 被当作一种内部 language action。</li>
+          <li>它不会改变外部环境，但会更新模型上下文，影响之后的 reasoning 和 acting。</li>
+        </ul>
+      </li>
+      <li>
+        <p><strong>ReAct 可以用于不同类型的任务。</strong></p>
+        <ul>
+          <li>Knowledge-intensive reasoning：HotpotQA 和 FEVER。</li>
+          <li>Interactive decision making：ALFWorld 和 WebShop。</li>
+          <li>高层思路保持一致，但 prompt format 和 action space 是 task-specific 的。</li>
+        </ul>
+      </li>
+      <li>
+        <p><strong>Trajectory 是可解释的。</strong></p>
+        <ul>
+          <li>人可以检查哪些内容来自内部 reasoning，哪些内容来自外部 observations。</li>
+          <li>这比直接生成答案更容易诊断失败原因。</li>
+        </ul>
+      </li>
+    </ol>
+
+    <h1>方法</h1>
+    <h2>ReAct Prompt Structure</h2>
+    <p>ReAct 使用三类 token。</p>
+    <ol>
+      <li><strong>Thought：</strong>内部 reasoning。
+        <ul>
+          <li>Example: Thought: <code>"I need more information."</code></li>
+        </ul>
+      </li>
+      <li><strong>Action：</strong>发送给工具或环境的命令。
+        <ul>
+          <li>Example: Action: <code>"Search[Eiffel Tower]"</code></li>
+        </ul>
+      </li>
+      <li><strong>Observation：</strong>工具或环境返回的结果。
+        <ul>
+          <li>Example: Observation: <code>"The Eiffel Tower is in Paris."</code></li>
+        </ul>
+      </li>
+    </ol>
+    <p>基本循环是：<strong>Thought → Action → Observation → Thought → Action → Observation</strong>。</p>
+    <aside class="callout">
+      <div>
+        <p><strong>重要细节</strong></p>
+        <p>原始 ReAct 是 observation-dependent trajectory 方法。下一步会基于已经累积的 thoughts、actions 和 observations。它不是并行 tree-search 算法。</p>
+      </div>
+    </aside>
+
+    <h2>Dense vs Sparse Thoughts</h2>
+    <p>这种差异来自 <strong>prompt design</strong>，不是来自一个单独训练出来的 task-type classifier。</p>
+    <ol>
+      <li>
+        <p><strong>模型设置</strong></p>
+        <ul>
+          <li>论文主要使用 frozen PaLM-540B，并配合 few-shot ReAct examples。</li>
+          <li>这些 examples 告诉模型允许输出哪些类型：Thought、Action 和 Observation。</li>
+          <li>所以模型行为是由 in-context trajectories 诱导出来的，而不是由新的 MoE routing mechanism 产生的。</li>
+        </ul>
+      </li>
+      <li>
+        <p><strong>Knowledge tasks：HotpotQA 和 FEVER</strong></p>
+        <ul>
+          <li>作者使用的 prompts 中，reasoning traces 和 actions 会比较密集地交替出现。</li>
+          <li>模型看到的模式类似：Thought → Action → Observation → Thought → Action → Observation。</li>
+          <li>这很合理，因为这些任务需要反复查找证据并进行事实核查。</li>
+        </ul>
+      </li>
+      <li>
+        <p><strong>Decision-making tasks：ALFWorld 和 WebShop</strong></p>
+        <ul>
+          <li>作者写的是 sparse reasoning traces 的 prompts。</li>
+          <li>prompt 仍然允许模型输出 thoughts，但不要求每个 action 前都必须有 thought。</li>
+          <li>模型会在这个 prompted format 内决定什么时候输出 thought，什么时候输出 action。</li>
+        </ul>
+        <aside class="callout">
+          <div>
+            <p><strong>精确表述</strong></p>
+            <p>在 ReAct 论文中，sparse thinking 是一种 prompting strategy。它不能证明模型从零开始被训练出了自动判断任务类型并选择 reasoning density 的能力。</p>
+          </div>
+        </aside>
+      </li>
+    </ol>
+
+    <h2>Action Spaces</h2>
+    <p>Action space 会随 benchmark 改变。</p>
+    <ol>
+      <li><strong>HotpotQA / FEVER</strong>
+        <ul>
+          <li><code>Search[entity]</code>：从 Wikipedia 页面或相似实体中检索信息。</li>
+          <li><code>Lookup[string]</code>：寻找下一句包含某个字符串的句子。</li>
+          <li><code>Finish[answer]</code>：返回最终答案。</li>
+        </ul>
+      </li>
+      <li><strong>ALFWorld</strong>
+        <ul>
+          <li>文本形式的模拟家庭环境 actions，例如去某个位置、打开物体、拿起物品，或放置物品。</li>
+        </ul>
+      </li>
+      <li><strong>WebShop</strong>
+        <ul>
+          <li>网页导航 actions，例如搜索、选择商品、选择选项，以及提交最终商品选择。</li>
+        </ul>
+      </li>
+    </ol>
+
+    <h2>Paper Trajectory Example</h2>
+    <p>论文中的一个 HotpotQA-style ReAct trajectory 大致是这样工作的：</p>
+    <ul>
+      <li>问题询问：除了 Apple Remote 之外，哪个设备也可以控制 Apple Remote 最初设计用于控制的程序。</li>
+      <li>模型先搜索 Apple Remote。</li>
+      <li>observation 把它指向 Front Row。</li>
+      <li>模型搜索 Front Row；当第一个结果不够有用时，它会重新组织搜索。</li>
+      <li>后续 observation 指出键盘 function keys 是另一种控制方式。</li>
+      <li>模型用这个答案结束。</li>
+    </ul>
+    <p>重要的不是这个具体实体，而是<strong>反馈循环</strong>：search result → updated thought → better search → final answer。</p>
+
+    <h1>实验设置</h1>
+    <p>论文在四个 benchmarks 上评估 ReAct。</p>
+    <ol>
+      <li><strong>HotpotQA</strong>
+        <ul>
+          <li>Multi-hop question answering。</li>
+          <li>模型需要从多个 Wikipedia facts 中检索并组合信息。</li>
+        </ul>
+      </li>
+      <li><strong>FEVER</strong>
+        <ul>
+          <li>Fact verification。</li>
+          <li>模型需要判断一个 claim 是 supported、refuted，还是没有足够信息。</li>
+        </ul>
+      </li>
+      <li><strong>ALFWorld</strong>
+        <ul>
+          <li>Text-based household environment。</li>
+          <li>模型需要在 long action horizon 和 sparse rewards 下完成任务。</li>
+        </ul>
+      </li>
+      <li><strong>WebShop</strong>
+        <ul>
+          <li>Web shopping environment。</li>
+          <li>模型需要浏览商品页面，并选择满足用户指令的商品。</li>
+        </ul>
+      </li>
+    </ol>
+    <p>论文中的主模型是 PaLM-540B，使用 few-shot prompting。作者也用生成出来的 trajectories 对较小的 PaLM models 做了 fine-tuning experiments。</p>
+
+    <h1>关键结果</h1>
+    <p>论文结果比 “ReAct 总是胜过 CoT” 更微妙。</p>
+    <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>任务</th>
+          <th>结果</th>
+          <th>结论</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>HotpotQA</td>
+          <td>ReAct 胜过 Act-only，但在 basic prompting setup 中略低于 CoT。ReAct + CoT-SC 表现最好。</td>
+          <td>ReAct 用 retrieval 来 grounding reasoning，但当 reasoning structure 很重要时，CoT 仍然很强。</td>
+        </tr>
+        <tr>
+          <td>FEVER</td>
+          <td>ReAct 胜过 Act-only 和 CoT；CoT-SC → ReAct 表现最好。</td>
+          <td>外部证据对 fact verification 尤其有用。</td>
+        </tr>
+        <tr>
+          <td>ALFWorld</td>
+          <td>相对于论文比较的 imitation/RL baseline，ReAct 的 success rate 绝对提升约 34%。</td>
+          <td>Sparse reasoning 有助于 long-horizon environment interaction。</td>
+        </tr>
+        <tr>
+          <td>WebShop</td>
+          <td>相对于论文比较的 baseline，ReAct 的 success rate 绝对提升约 10%。</td>
+          <td>Reasoning 有助于在嘈杂的真实文本环境中导航。</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+    <aside class="callout">
+      <div>
+        <p><strong>结果结论</strong></p>
+        <p>ReAct 的价值不只是更高准确率。它更大的贡献是证明：reasoning traces 和 environment actions 可以在同一条 task-solving trajectory 中互相增强。</p>
+      </div>
+    </aside>
+
+    <h1>局限性</h1>
+    <p>这一节对论文阅读和 infrastructure design 都很重要。</p>
+    <ol>
+      <li><strong>Sequential, observation-dependent execution</strong>
+        <ul>
+          <li>在原始 ReAct 论文中，agent 遵循一条 trajectory。</li>
+          <li>下一步 thought/action 依赖当前上下文和最新 observation。</li>
+          <li>这让 ReAct 容易检查，但也产生了等待点。</li>
+        </ul>
+      </li>
+      <li><strong>Tool latency</strong>
+        <ul>
+          <li>假设一次 LLM call 需要 <code>300 ms</code>，一次 search call 需要 <code>500 ms</code>。</li>
+          <li>五轮 ReAct 大约需要 <code>5 × (300 + 500) = 4 seconds</code>。</li>
+          <li>这个数字只是说明性例子，但模式是真实的：重复 tool calls 会增加 latency。</li>
+        </ul>
+      </li>
+      <li><strong>Context growth</strong>
+        <ul>
+          <li>每一轮都会把新的 <code>Thought</code>、<code>Action</code> 和 <code>Observation</code> 文本追加进 prompt。</li>
+          <li>更长的 trajectories 意味着更长 prompts、更高 KV cache usage，以及更大的 memory pressure。</li>
+        </ul>
+      </li>
+      <li><strong>Many inference calls</strong>
+        <ul>
+          <li>经典 chatbot 可能把一个用户请求变成一次长 generation。</li>
+          <li>ReAct 可能把一个用户请求变成多次短 generation。</li>
+          <li>这会让同一个用户任务更贵，也更难调度。</li>
+        </ul>
+      </li>
+      <li><strong>Reasoning rigidity</strong>
+        <ul>
+          <li>论文发现，交错 thoughts、actions 和 observations 可以提升 grounding。</li>
+          <li>但这个结构也可能比 free-form CoT 更不灵活。</li>
+          <li>一种失败模式是重复之前的 thoughts 或 actions，而不是恢复。</li>
+        </ul>
+      </li>
+      <li><strong>Search / observation failure</strong>
+        <ul>
+          <li>ReAct 很依赖工具是否返回有用信息。</li>
+          <li>不好的 search result 可能会带偏下一步 reasoning。</li>
+          <li>模型可能需要重新组织 search，但不一定总能恢复。</li>
+        </ul>
+      </li>
+    </ol>
+    <aside class="callout">
+      <div>
+        <p><strong>核心局限</strong></p>
+        <p>ReAct 通过 observations 来 grounding reasoning，从而减少 hallucination；但这种 grounding 的代价是 sequential waiting、prompt growth，以及对 tool quality 的依赖。</p>
+      </div>
+    </aside>
+
+    <h1>基础设施影响</h1>
+    <p>ReAct 把一种现在很常见的 agent workload pattern 具体化了。</p>
+    <ul>
+      <li><strong>Traditional serving：</strong> User → one long generation。</li>
+      <li><strong>Agent serving：</strong> User → short generation → tool call → short generation → tool call → answer。</li>
+    </ul>
+    <p>这种 workload 会变成：</p>
+    <ul>
+      <li><strong>bursty：</strong>很多次短 model calls，而不是一次连续 generation。</li>
+      <li><strong>asynchronous：</strong>tool calls 会在不同时间返回。</li>
+      <li><strong>latency-sensitive：</strong>下一步 reasoning/action 通常要等待前一个 observation。</li>
+      <li><strong>stateful：</strong>每一步都依赖累积起来的 trajectory。</li>
+      <li><strong>cache-heavy：</strong>重复 calls 会复用不断增长的 prefix，因此 KV cache management 很重要。</li>
+    </ul>
+    <aside class="callout">
+      <div>
+        <p><strong>Infrastructure takeaway</strong></p>
+        <p>Agent serving 不只是更长的 prompting。它是在不断增长的 trajectory 上进行 repeated、stateful、tool-linked inference。</p>
+      </div>
+    </aside>
+    <p>后续系统需要谨慎描述。它们解决相关 pressure points，但并不全是 ReAct 的直接后代。</p>
+    <ol>
+      <li><strong>vLLM / PagedAttention</strong>
+        <ul>
+          <li>相关 pressure point：KV cache memory pressure 和 fragmentation。</li>
+          <li>核心思路：用 paged memory blocks 高效管理 KV cache。</li>
+        </ul>
+      </li>
+      <li><strong>SGLang</strong>
+        <ul>
+          <li>相关 pressure point：structured LLM programs、agent control、RAG，以及 multi-call execution。</li>
+          <li>核心思路：把 program structure 暴露给 runtime，让 runtime 优化执行。</li>
+        </ul>
+      </li>
+      <li><strong>DistServe</strong>
+        <ul>
+          <li>相关 pressure point：prefill 和 decode 有不同瓶颈和 latency goals。</li>
+          <li>核心思路：disaggregate prefill and decode resources。</li>
+        </ul>
+      </li>
+      <li><strong>ReWOO</strong>
+        <ul>
+          <li>相关 pressure point：ReAct-style observation-dependent reasoning 会反复因为 tool responses 停下来，并重新发送增长中的 prompts。</li>
+          <li>核心思路：先 plan，再用 workers 收集 evidence，最后用收集到的 evidence solve。</li>
+        </ul>
+      </li>
+      <li><strong>LATS</strong>
+        <ul>
+          <li>相关 pressure point：ReAct 只跟随一条 trajectory，不会搜索多条可能的 reasoning/action paths。</li>
+          <li>核心思路：把 ReAct-style steps 扩展成 Monte Carlo tree search。</li>
+        </ul>
+      </li>
+    </ol>
+
+    <h1>与邻近方法对比</h1>
+    <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>方法</th>
+          <th>核心思路</th>
+          <th>Tool / environment use</th>
+          <th>Execution shape</th>
+          <th>主要局限</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>CoT</td>
+          <td>先生成 reasoning，再给出答案。</td>
+          <td>默认没有外部工具。</td>
+          <td>一条 reasoning chain。</td>
+          <td>可能 hallucinate unsupported facts。</td>
+        </tr>
+        <tr>
+          <td>Act-only</td>
+          <td>基于 observations 生成 actions。</td>
+          <td>有。</td>
+          <td>Observation → Action trajectory。</td>
+          <td>缺少显式的 high-level reasoning。</td>
+        </tr>
+        <tr>
+          <td>ReAct</td>
+          <td>交错 thoughts、actions 和 observations。</td>
+          <td>有。</td>
+          <td>Sequential observation-dependent trajectory。</td>
+          <td>Latency、context growth、tool-result dependence。</td>
+        </tr>
+        <tr>
+          <td>Toolformer</td>
+          <td>训练模型判断何时以及如何调用 APIs。</td>
+          <td>有，通过 learned API calls。</td>
+          <td>API calls 被插入 language modeling。</td>
+          <td>需要构造和过滤 tool-use data。</td>
+        </tr>
+        <tr>
+          <td>ReWOO</td>
+          <td>先 plan，再执行 tool calls，最后 solve。</td>
+          <td>有。</td>
+          <td>Plan → Work → Solve。</td>
+          <td>在 evidence 返回前，plan 可能就是错的。</td>
+        </tr>
+        <tr>
+          <td>LATS</td>
+          <td>在 reasoning/action steps 上做 tree search。</td>
+          <td>有。</td>
+          <td>Search tree over possible trajectories。</td>
+          <td>比单条 trajectory 更昂贵。</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h1>总结</h1>
+    <ol>
+      <li>ReAct = <strong>Reason + Act</strong>。</li>
+      <li>核心循环是 <strong>Thought → Action → Observation</strong>。</li>
+      <li>原始 ReAct 是一种 <strong>sequential, observation-dependent trajectory method</strong>，不是 tree-search method。</li>
+      <li>ReAct 通过 tool/environment observations 来 grounding reasoning，从而减少 hallucination。</li>
+      <li>现代 agent-serving research 会研究 ReAct 暴露出的 pressure points：repeated calls、tool latency、context growth、KV cache pressure、scheduling 和 execution structure。</li>
+    </ol>
+
+    <h1>Sources</h1>
+    <ul>
+      <li><a href="https://arxiv.org/abs/2210.03629">ReAct: Synergizing Reasoning and Acting in Language Models</a></li>
+      <li><a href="https://arxiv.org/abs/2302.04761">Toolformer: Language Models Can Teach Themselves to Use Tools</a></li>
+      <li><a href="https://arxiv.org/abs/2305.18323">ReWOO: Decoupling Reasoning from Observations</a></li>
+      <li><a href="https://arxiv.org/abs/2310.04406">Language Agent Tree Search</a></li>
+      <li><a href="https://arxiv.org/abs/2309.06180">vLLM / PagedAttention</a></li>
+      <li><a href="https://arxiv.org/abs/2312.07104">SGLang</a></li>
+      <li><a href="https://arxiv.org/abs/2401.09670">DistServe</a></li>
+    </ul>
+  </div>
+</article>
+
+</article>
+
+		</main>
+
+
+		<style>
+			html body {
+				max-width: none !important;
+				margin: 0 !important;
+				padding: 0 24px !important;
+				color: var(--text) !important;
+				background: var(--bg) !important;
+				white-space: normal !important;
+			}
+
+			.site-header,
+			.container,
+			.site-footer {
+				max-width: 1120px !important;
+				margin-left: auto !important;
+				margin-right: auto !important;
+			}
+
+			.site-header {
+				background: var(--header-bg) !important;
+				box-shadow: 0 0 0 100vmax var(--header-bg) !important;
+				clip-path: inset(0 -100vmax) !important;
+			}
+
+			.site-header a,
+			.site-nav a,
+			.site-footer a {
+				text-decoration: none !important;
+			}
+
+			.post {
+				max-width: 1040px !important;
+				padding: 34px 40px 46px !important;
+				border: 1px solid var(--github-border) !important;
+				border-radius: 6px !important;
+				background: var(--surface) !important;
+				color: var(--github-text) !important;
+			}
+
+			.post-header {
+				margin-bottom: 2.25rem !important;
+				text-align: left !important;
+			}
+
+			.post-title {
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 2rem !important;
+				font-weight: 600 !important;
+				line-height: 1.2 !important;
+			}
+
+			.post .page,
+			.post .page-body {
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 16px !important;
+				line-height: 1.65 !important;
+				text-align: left !important;
+				white-space: normal !important;
+			}
+
+			.post .page-body {
+				counter-reset: section;
+			}
+
+			.post .page p,
+			.post .page li,
+			.post .page .collection-content,
+			.post .page .simple-table,
+			.post .page .table_of_contents-item,
+			.post .page .bookmark-title,
+			.post .page .bookmark-description,
+			.post .page .bookmark-href {
+				color: var(--github-text) !important;
+				font-size: 1rem !important;
+				line-height: 1.65 !important;
+			}
+
+
+			.language-switch {
+				display: inline-flex !important;
+				gap: 4px !important;
+				margin-top: 1rem !important;
+				padding: 3px !important;
+				border: 1px solid var(--github-border) !important;
+				border-radius: 999px !important;
+				background: var(--github-bg) !important;
+				font-family: var(--sans) !important;
+			}
+
+			.language-option {
+				display: inline-flex !important;
+				align-items: center !important;
+				min-height: 30px !important;
+				padding: 0.25rem 0.8rem !important;
+				border-radius: 999px !important;
+				color: var(--github-muted) !important;
+				font-size: 0.78rem !important;
+				font-weight: 700 !important;
+				letter-spacing: 0.04em !important;
+				line-height: 1 !important;
+				text-decoration: none !important;
+			}
+
+			.language-option:hover {
+				color: var(--github-text) !important;
+				text-decoration: none !important;
+			}
+
+			.language-option.is-active {
+				background: var(--surface) !important;
+				color: var(--github-text) !important;
+				box-shadow: 0 1px 2px rgba(31, 35, 40, 0.08) !important;
+			}
+
+			.language-option.is-disabled {
+				color: #8c959f !important;
+				cursor: not-allowed !important;
+			}
+
+
+			.translation-note {
+				margin: 1.5rem 0 0 !important;
+				padding: 1.1rem 1.25rem !important;
+				border: 1px solid var(--github-border) !important;
+				border-left: 4px solid #0969da !important;
+				border-radius: 6px !important;
+				background: var(--github-bg) !important;
+			}
+
+			.translation-note .eyebrow {
+				margin-bottom: 0.55rem !important;
+				color: var(--github-muted) !important;
+				font-size: 0.78rem !important;
+				font-weight: 700 !important;
+				letter-spacing: 0.08em !important;
+				text-transform: uppercase !important;
+			}
+
+			.translation-note p:last-child {
+				margin-bottom: 0 !important;
+			}
+
+			.post .page h1 {
+				counter-increment: section;
+				counter-reset: subsection;
+				margin: 2rem 0 1rem !important;
+				padding-bottom: 0.35rem !important;
+				border-bottom: 1px solid var(--github-border) !important;
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 1.55rem !important;
+				font-weight: 600 !important;
+				line-height: 1.3 !important;
+			}
+
+			.post .page h1::before {
+				content: counter(section) ". ";
+				color: var(--github-muted);
+			}
+
+			.post .page h2 {
+				counter-increment: subsection;
+				counter-reset: subsubsection;
+				margin: 1.6rem 0 0.8rem !important;
+				padding-bottom: 0.25rem !important;
+				border-bottom: 1px solid var(--github-border) !important;
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 1.25rem !important;
+				font-weight: 600 !important;
+				line-height: 1.35 !important;
+			}
+
+			.post .page h2::before {
+				content: counter(section) "." counter(subsection) " ";
+				color: var(--github-muted);
+			}
+
+			.post .page h3 {
+				counter-increment: subsubsection;
+				margin: 1.35rem 0 0.65rem !important;
+				color: var(--github-text) !important;
+				font-family: var(--sans) !important;
+				font-size: 1.1rem !important;
+				font-weight: 600 !important;
+				line-height: 1.35 !important;
+			}
+
+			.post .page h3::before {
+				content: counter(section) "." counter(subsection) "." counter(subsubsection) " ";
+				color: var(--github-muted);
+			}
+
+			.post .page :not(pre) > code {
+				padding: 0.2em 0.4em !important;
+				border-radius: 6px !important;
+				background: rgba(175, 184, 193, 0.2) !important;
+				color: black !important;
+			}
+
+			.post .page pre.code,
+			.post .page pre.code.code-wrap {
+				overflow-x: auto !important;
+				padding: 1.25em 1em !important;
+				border: 1px solid var(--github-border) !important;
+				border-radius: 6px !important;
+				background: var(--github-bg) !important;
+				white-space: pre !important;
+				word-break: normal !important;
+			}
+
+			.post .page pre.code code {
+				color: #37352f !important;
+				white-space: pre !important;
+				word-break: normal !important;
+			}
+
+			.post .page table {
+				width: 100% !important;
+				border-collapse: collapse !important;
+			}
+
+			.post .page th,
+			.post .page td {
+				border: 1px solid var(--github-border) !important;
+				padding: 0.45rem 0.65rem !important;
+			}
+
+			.post .page th {
+				background: var(--github-bg) !important;
+				font-weight: 600 !important;
+			}
+
+			.post .page a {
+				color: #0969da !important;
+			}
+
+			.post .page a:hover {
+				text-decoration: underline !important;
+			}
+
+			.post .page .highlight-gray_background {
+				background: rgba(42, 28, 0, 0.07) !important;
+			}
+
+			.post .page .highlight-brown_background {
+				background: rgba(139, 46, 0, 0.086) !important;
+			}
+
+			.post .page .highlight-orange_background {
+				background: rgba(224, 101, 1, 0.129) !important;
+			}
+
+			.post .page .highlight-yellow_background {
+				background: rgba(211, 168, 0, 0.137) !important;
+			}
+
+			.post .page .highlight-teal_background {
+				background: rgba(0, 100, 45, 0.09) !important;
+			}
+
+			.post .page .highlight-blue_background {
+				background: rgba(0, 124, 215, 0.094) !important;
+			}
+
+			.post .page .highlight-purple_background {
+				background: rgba(102, 0, 178, 0.078) !important;
+			}
+
+			.post .page .highlight-pink_background {
+				background: rgba(197, 0, 93, 0.086) !important;
+			}
+
+			.post .page .highlight-red_background {
+				background: rgba(223, 22, 0, 0.094) !important;
+			}
+
+			.post .page .callout {
+				display: flex !important;
+				gap: 0.75rem !important;
+				margin: 1rem 0 !important;
+				padding: 0.8rem 1rem !important;
+				border: 1px solid var(--github-border) !important;
+				border-left: 4px solid #0969da !important;
+				border-radius: 6px !important;
+				background: var(--github-bg) !important;
+				white-space: normal !important;
+			}
+
+			.post .page figure {
+				margin: 1.4rem 0 !important;
+			}
+
+			.post .page .notion-text-equation-token .katex {
+				font-size: 1.12em !important;
+			}
+
+			.post .page .katex-display,
+			.post .page figure.equation .katex {
+				font-size: 1.18em !important;
+			}
+
+			.post .page .equation {
+				overflow-x: auto !important;
+				padding: 0.75rem 0 !important;
+			}
+
+			@media only screen and (max-width: 720px) {
+				.post {
+					padding: 24px 18px 34px !important;
+				}
+			}
+		</style>
+
+		<footer class="site-footer">
+			<a href="mailto:sharynhu826@gmail.com">sharynhu826@gmail.com</a>
+			<a href="https://github.com/SharynHu">github.com/SharynHu</a>
+		</footer>
+	</body>
+</html>
