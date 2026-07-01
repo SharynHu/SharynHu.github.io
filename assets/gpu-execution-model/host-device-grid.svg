@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="760" viewBox="0 0 980 760" role="img" aria-labelledby="title desc">
+  <title id="title">Python host launches a CUDA kernel on the GPU</title>
+  <desc id="desc">A high-level GPU execution model diagram showing a Python CPU host launching a kernel to a GPU device grid made of blocks and threads.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1d4ed8"/>
+    </marker>
+    <filter id="shadow" x="-12%" y="-12%" width="124%" height="132%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#0f172a" flood-opacity="0.10"/>
+    </filter>
+    <style>
+      .bg { fill: #f8fbff; }
+      .title { font: 700 30px Inter, Arial, sans-serif; fill: #102a43; }
+      .subtitle { font: 500 17px Inter, Arial, sans-serif; fill: #52687f; }
+      .section { font: 700 22px Inter, Arial, sans-serif; fill: #173153; }
+      .label { font: 700 17px Inter, Arial, sans-serif; fill: #1f3554; }
+      .small { font: 500 14px Inter, Arial, sans-serif; fill: #4c627a; }
+      .tiny { font: 600 12px Inter, Arial, sans-serif; fill: #64748b; }
+      .host { fill: #e0f2fe; stroke: #38bdf8; stroke-width: 2.4; filter: url(#shadow); }
+      .device { fill: #eef2ff; stroke: #818cf8; stroke-width: 2.6; filter: url(#shadow); }
+      .grid { fill: #ffffff; stroke: #93c5fd; stroke-width: 2.2; }
+      .block { fill: #dbeafe; stroke: #3b82f6; stroke-width: 2; }
+      .thread { fill: #ffffff; stroke: #60a5fa; stroke-width: 1.4; }
+      .call { fill: #ffffff; stroke: #7dd3fc; stroke-width: 2; }
+      .arrow { fill: none; stroke: #1d4ed8; stroke-width: 3.2; marker-end: url(#arrow); }
+      .dash { fill: none; stroke: #94a3b8; stroke-width: 2; stroke-dasharray: 7 6; }
+      .pill { fill: #dbeafe; stroke: #93c5fd; stroke-width: 1.5; }
+      .pill-text { font: 700 13px Inter, Arial, sans-serif; fill: #1d4ed8; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="980" height="760"/>
+  <text class="title" x="64" y="70">Host launches work; device executes threads</text>
+  <text class="subtitle" x="64" y="101">Python runs on the CPU. A CUDA kernel launch creates a GPU grid of blocks, and each block contains many threads.</text>
+
+  <rect class="host" x="210" y="145" width="560" height="132" rx="22"/>
+  <text class="section" x="490" y="184" text-anchor="middle">CPU host</text>
+  <text class="small" x="490" y="209" text-anchor="middle">regular Python process controls the launch</text>
+  <rect class="call" x="315" y="229" width="350" height="34" rx="17"/>
+  <text class="tiny" x="490" y="251" text-anchor="middle">Python code -> CUDA runtime -> kernel launch</text>
+
+  <path class="arrow" d="M490 277 L490 345"/>
+  <rect class="pill" x="398" y="299" width="184" height="32" rx="16"/>
+  <text class="pill-text" x="490" y="320" text-anchor="middle">launches kernel</text>
+
+  <rect class="device" x="86" y="366" width="808" height="322" rx="28"/>
+  <text class="section" x="130" y="414">GPU device</text>
+  <text class="small" x="130" y="439">kernel execution happens here</text>
+
+  <rect class="grid" x="290" y="405" width="544" height="232" rx="20"/>
+  <text class="label" x="562" y="437" text-anchor="middle">Grid: all blocks for this kernel launch</text>
+
+  <g transform="translate(326 466)">
+    <rect class="block" x="0" y="0" width="142" height="116" rx="14"/>
+    <text class="label" x="71" y="28" text-anchor="middle">block 0</text>
+    <text class="tiny" x="71" y="100" text-anchor="middle">threads 0..255</text>
+    <rect class="thread" x="24" y="44" width="18" height="18" rx="4"/>
+    <rect class="thread" x="49" y="44" width="18" height="18" rx="4"/>
+    <rect class="thread" x="74" y="44" width="18" height="18" rx="4"/>
+    <rect class="thread" x="99" y="44" width="18" height="18" rx="4"/>
+    <rect class="thread" x="24" y="68" width="18" height="18" rx="4"/>
+    <rect class="thread" x="49" y="68" width="18" height="18" rx="4"/>
+    <rect class="thread" x="74" y="68" width="18" height="18" rx="4"/>
+    <rect class="thread" x="99" y="68" width="18" height="18" rx="4"/>
+  </g>
+
+  <g transform="translate(492 466)">
+    <rect class="block" x="0" y="0" width="142" height="116" rx="14"/>
+    <text class="label" x="71" y="28" text-anchor="middle">block 1</text>
+    <text class="tiny" x="71" y="100" text-anchor="middle">threads 0..255</text>
+    <rect class="thread" x="24" y="44" width="18" height="18" rx="4"/>
+    <rect class="thread" x="49" y="44" width="18" height="18" rx="4"/>
+    <rect class="thread" x="74" y="44" width="18" height="18" rx="4"/>
+    <rect class="thread" x="99" y="44" width="18" height="18" rx="4"/>
+    <rect class="thread" x="24" y="68" width="18" height="18" rx="4"/>
+    <rect class="thread" x="49" y="68" width="18" height="18" rx="4"/>
+    <rect class="thread" x="74" y="68" width="18" height="18" rx="4"/>
+    <rect class="thread" x="99" y="68" width="18" height="18" rx="4"/>
+  </g>
+
+  <g transform="translate(658 466)">
+    <rect class="block" x="0" y="0" width="142" height="116" rx="14"/>
+    <text class="label" x="71" y="28" text-anchor="middle">block 2</text>
+    <text class="tiny" x="71" y="100" text-anchor="middle">threads 0..255</text>
+    <rect class="thread" x="24" y="44" width="18" height="18" rx="4"/>
+    <rect class="thread" x="49" y="44" width="18" height="18" rx="4"/>
+    <rect class="thread" x="74" y="44" width="18" height="18" rx="4"/>
+    <rect class="thread" x="99" y="44" width="18" height="18" rx="4"/>
+    <rect class="thread" x="24" y="68" width="18" height="18" rx="4"/>
+    <rect class="thread" x="49" y="68" width="18" height="18" rx="4"/>
+    <rect class="thread" x="74" y="68" width="18" height="18" rx="4"/>
+    <rect class="thread" x="99" y="68" width="18" height="18" rx="4"/>
+  </g>
+
+  <path class="dash" d="M196 478 H278"/>
+  <text class="label" x="178" y="469" text-anchor="middle">work is split</text>
+  <text class="small" x="178" y="493" text-anchor="middle">across blocks</text>
+
+  <rect class="pill" x="326" y="604" width="474" height="34" rx="17"/>
+  <text class="pill-text" x="563" y="626" text-anchor="middle">each thread computes one or more data elements</text>
+
+  <text class="tiny" x="490" y="721" text-anchor="middle">Mental model: CPU starts the GPU job; GPU schedules and runs many lightweight threads in parallel.</text>
+</svg>
