@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="620" viewBox="0 0 1600 620" role="img" aria-labelledby="title desc">
+  <title id="title">Colored handwritten CPU host to GPU grid execution model</title>
+  <desc id="desc">A colored hand-drawn style diagram showing a CPU Python process launching work to a GPU grid containing blocks and threads.</desc>
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 12 10" refX="10" refY="5" markerWidth="13" markerHeight="11" orient="auto">
+      <path d="M 0 0 L 12 5 L 0 10 z" fill="#111"/>
+    </marker>
+    <filter id="paper-jitter" x="-4%" y="-4%" width="108%" height="108%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="1" seed="9"/>
+      <feDisplacementMap in="SourceGraphic" scale="1.1"/>
+    </filter>
+    <style>
+      .ink {
+        fill: none;
+        stroke: #111;
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        filter: url(#paper-jitter);
+      }
+      .thin {
+        fill: none;
+        stroke: #111;
+        stroke-width: 2.4;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        filter: url(#paper-jitter);
+      }
+      .arrow {
+        fill: none;
+        stroke: #111;
+        stroke-width: 3.2;
+        stroke-linecap: round;
+        marker-end: url(#arrowhead);
+        filter: url(#paper-jitter);
+      }
+      .label {
+        font-family: "Comic Sans MS", "Comic Neue", "Chalkboard SE", "Marker Felt", cursive;
+        font-size: 44px;
+        fill: #111;
+      }
+      .label-lg {
+        font-family: "Comic Sans MS", "Comic Neue", "Chalkboard SE", "Marker Felt", cursive;
+        font-size: 58px;
+        fill: #111;
+      }
+      .label-sm {
+        font-family: "Comic Sans MS", "Comic Neue", "Chalkboard SE", "Marker Felt", cursive;
+        font-size: 36px;
+        fill: #111;
+      }
+      .wash-cpu { fill: #fff4bf; opacity: 0.78; filter: url(#paper-jitter); }
+      .wash-process { fill: #ffe1a8; opacity: 0.72; filter: url(#paper-jitter); }
+      .wash-gpu { fill: #dbeafe; opacity: 0.58; filter: url(#paper-jitter); }
+      .wash-grid { fill: #eefdf6; opacity: 0.72; filter: url(#paper-jitter); }
+      .wash-b0 { fill: #fee2e2; opacity: 0.76; filter: url(#paper-jitter); }
+      .wash-b1 { fill: #ede9fe; opacity: 0.78; filter: url(#paper-jitter); }
+      .wash-b2 { fill: #dff7ed; opacity: 0.78; filter: url(#paper-jitter); }
+      .thread-fill { fill: #fffdf4; opacity: 0.95; filter: url(#paper-jitter); }
+      .blue-ink { stroke: #2563eb; }
+      .arrow-fill { fill: #2563eb; filter: url(#paper-jitter); }
+      .cpu-text { fill: #92400e; }
+      .gpu-text { fill: #1d4ed8; }
+      .grid-text { fill: #047857; }
+      .block0-text { fill: #b91c1c; }
+      .block1-text { fill: #6d28d9; }
+      .block2-text { fill: #047857; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="620" fill="#fff"/>
+
+  <!-- CPU host -->
+  <path class="wash-cpu" d="M41 109 L400 106 L401 294 L42 296 Z"/>
+  <path class="ink" d="M35 102 L405 100 L408 300 L34 302 Z"/>
+  <text class="label cpu-text" x="60" y="155" transform="rotate(-3 60 155)">CPU</text>
+  <path class="wash-process" d="M69 190 L384 188 L383 259 L70 258 Z"/>
+  <path class="ink" d="M62 182 L392 181 L391 266 L61 266 Z"/>
+  <text class="label" x="75" y="232" transform="rotate(-2 75 232)">python process</text>
+
+  <!-- launch path -->
+  <path class="arrow blue-ink" marker-end="none" d="M408 238 C488 237 570 238 635 237"/>
+  <path d="M632 219 L678 238 L632 256 Z" class="arrow-fill"/>
+  <text class="label" x="444" y="198" transform="rotate(-5 444 198)">launch</text>
+  <circle cx="536" cy="315" r="2.4" fill="#111"/>
+  <circle cx="536" cy="355" r="2.4" fill="#111"/>
+  <circle cx="536" cy="395" r="2.4" fill="#111"/>
+
+  <!-- GPU device -->
+  <path class="wash-gpu" d="M690 55 L1552 54 L1554 562 L690 563 Z"/>
+  <path class="ink" d="M680 42 L1564 41 L1566 574 L678 576 Z"/>
+  <text class="label-lg gpu-text" x="735" y="83" transform="rotate(-6 735 83)">GPU</text>
+
+  <!-- Grid -->
+  <path class="wash-grid" d="M733 143 L1509 143 L1508 519 L735 518 Z"/>
+  <path class="ink" d="M724 132 L1520 131 L1518 530 L724 530 Z"/>
+  <text class="label-lg grid-text" x="760" y="205" transform="rotate(-3 760 205)">Grid</text>
+
+  <!-- block 0 -->
+  <g transform="translate(768 263) rotate(-1)">
+    <text class="label-sm block0-text" x="25" y="-8">block0</text>
+    <path class="wash-b0" d="M7 8 L160 7 L161 242 L9 244 Z"/>
+    <path class="ink" d="M0 0 L168 -1 L169 250 L0 251 Z"/>
+    <path class="thin thread-fill" d="M24 29 L48 27 L50 57 L23 60 Z"/>
+    <path class="thin thread-fill" d="M70 26 L93 25 L96 56 L72 58 Z"/>
+    <path class="thin thread-fill" d="M112 24 L138 22 L140 56 L113 57 Z"/>
+    <path class="thin thread-fill" d="M23 78 L47 75 L49 110 L21 112 Z"/>
+    <path class="thin thread-fill" d="M69 77 L94 75 L95 110 L67 110 Z"/>
+    <path class="thin thread-fill" d="M112 74 L139 74 L139 108 L112 110 Z"/>
+    <path class="thin thread-fill" d="M24 126 L49 123 L50 157 L23 160 Z"/>
+    <path class="thin thread-fill" d="M71 125 L95 124 L97 157 L68 159 Z"/>
+    <path class="thin thread-fill" d="M113 123 L140 121 L141 156 L113 158 Z"/>
+    <text class="label-sm" x="20" y="203" transform="rotate(-7 20 203)">threads</text>
+    <text class="label-sm" x="20" y="240" transform="rotate(-2 20 240)">0-255</text>
+  </g>
+
+  <!-- block 1 -->
+  <g transform="translate(960 263) rotate(1)">
+    <text class="label-sm block1-text" x="28" y="-9">block1</text>
+    <path class="wash-b1" d="M7 8 L160 7 L161 242 L9 244 Z"/>
+    <path class="ink" d="M0 0 L168 -2 L169 250 L-1 251 Z"/>
+    <path class="thin thread-fill" d="M23 28 L49 26 L48 57 L21 59 Z"/>
+    <path class="thin thread-fill" d="M70 27 L94 25 L96 56 L71 58 Z"/>
+    <path class="thin thread-fill" d="M113 24 L137 22 L140 55 L112 57 Z"/>
+    <path class="thin thread-fill" d="M22 78 L47 76 L50 110 L22 112 Z"/>
+    <path class="thin thread-fill" d="M69 77 L93 75 L95 109 L68 111 Z"/>
+    <path class="thin thread-fill" d="M113 75 L139 73 L140 108 L113 110 Z"/>
+    <path class="thin thread-fill" d="M24 126 L50 123 L51 156 L22 160 Z"/>
+    <path class="thin thread-fill" d="M71 125 L95 123 L97 156 L69 159 Z"/>
+    <path class="thin thread-fill" d="M113 123 L140 121 L141 155 L113 158 Z"/>
+    <text class="label-sm" x="22" y="203" transform="rotate(-5 22 203)">threads</text>
+    <text class="label-sm" x="20" y="240" transform="rotate(-2 20 240)">0-255</text>
+  </g>
+
+  <!-- block 2 -->
+  <g transform="translate(1162 263) rotate(-1)">
+    <text class="label-sm block2-text" x="31" y="-8">block2</text>
+    <path class="wash-b2" d="M7 8 L160 7 L161 242 L9 244 Z"/>
+    <path class="ink" d="M0 0 L168 0 L169 250 L0 250 Z"/>
+    <path class="thin thread-fill" d="M24 30 L49 27 L50 58 L22 61 Z"/>
+    <path class="thin thread-fill" d="M70 27 L95 25 L96 57 L70 58 Z"/>
+    <path class="thin thread-fill" d="M113 24 L139 23 L140 56 L113 57 Z"/>
+    <path class="thin thread-fill" d="M23 79 L48 76 L49 111 L21 112 Z"/>
+    <path class="thin thread-fill" d="M70 77 L94 75 L96 110 L68 111 Z"/>
+    <path class="thin thread-fill" d="M113 75 L140 73 L140 108 L113 110 Z"/>
+    <path class="thin thread-fill" d="M24 127 L49 123 L51 157 L22 160 Z"/>
+    <path class="thin thread-fill" d="M71 125 L96 123 L98 157 L69 159 Z"/>
+    <path class="thin thread-fill" d="M113 123 L141 121 L142 156 L113 158 Z"/>
+    <text class="label-sm" x="20" y="203" transform="rotate(-6 20 203)">threads</text>
+    <text class="label-sm" x="20" y="240" transform="rotate(-2 20 240)">0-255</text>
+  </g>
+
+  <!-- continuation marks -->
+  <text class="label-sm" x="1357" y="356" transform="rotate(2 1357 356)">...</text>
+  <text class="label-sm" x="1454" y="356" transform="rotate(6 1454 356)">...</text>
+</svg>
