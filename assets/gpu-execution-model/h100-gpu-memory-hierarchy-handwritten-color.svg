@@ -1,0 +1,78 @@
+<?xml version="1.0"?>
+<svg width="1600" height="1120" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg">
+ <title id="title">H100 GPU-level memory hierarchy</title>
+ <desc id="desc">Hand-written style text with clean straight lines showing the H100 GPU-level memory hierarchy: SMs connect to GPU-wide L2 cache, L2 connects to HBM3 global memory, and CPU host RAM transfers over PCIe or a host-device interconnect.</desc>
+ <defs>
+  <filter height="130%" id="softShadow" width="120%" x="-10%" y="-10%"/>
+  <style>.paper { fill: #fffdf7; }
+      .ink { fill: #111111; }
+      .muted { fill: #565f70; }
+      .stroke { stroke: #111111; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+      .line { fill: none; stroke: #111111; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+      .arrow { fill: none; stroke: #111111; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow); }
+      .hand { font-family: &quot;Comic Sans MS&quot;, &quot;Bradley Hand&quot;, &quot;Marker Felt&quot;, &quot;Segoe Print&quot;, cursive; }
+      .sans { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif; }
+      .title { font-size: 58px; font-weight: 700; }
+      .label { font-size: 42px; font-weight: 700; }
+      .body { font-size: 31px; font-weight: 600; }
+      .small { font-size: 24px; font-weight: 600; }
+      .tiny { font-size: 20px; font-weight: 600; }
+      .gpuFill { fill: #f7f8fb; }
+      .smFill { fill: #d7f2c0; }
+      .l2Fill { fill: #ccd9ff; }
+      .hbmFill { fill: #ffd39a; }
+      .cpuFill { fill: #eeeeee; }
+      .noteFill { fill: #fff7c7; }</style>
+ </defs>
+ <g class="layer">
+  <title>Layer 1</title>
+  <rect class="paper" height="1120" id="svg_2" transform="matrix(1 0 0 1.06696 13 25)" width="1600" x="0" y="0"/>
+  <g id="svg_3" transform="matrix(1 0 0 1 0 0) matrix(1 0 0 1 0 0) translate(82 48)">
+   <rect class="stroke gpuFill" filter="url(#softShadow)" height="770" id="svg_4" transform="matrix(1 0 0 1 -79 29)" width="1324" x="56" y="22"/>
+   <text class="hand title ink" id="svg_5" x="140" y="116">GPU H100</text>
+   <text class="sans tiny muted" id="svg_6" x="838" y="98">GPU-level view only.</text>
+   <text class="sans tiny muted" id="svg_7" x="838" y="126">SM-local registers / L1 / SMEM are discussed later.</text>
+   <g id="svg_8" transform="translate(160,190)">
+    <rect class="stroke smFill" height="126" id="svg_9" width="280" x="0" y="0"/>
+    <text class="hand label ink" id="svg_10" x="76" y="80">SM0</text>
+   </g>
+   <g id="svg_11" transform="translate(560,190)">
+    <rect class="stroke smFill" height="126" id="svg_12" width="280" x="0" y="0"/>
+    <text class="hand label ink" id="svg_13" x="76" y="80">SM1</text>
+   </g>
+   <text class="hand label ink" id="svg_14" x="930" y="270">...</text>
+   <g id="svg_15" transform="translate(1040,190)">
+    <rect class="stroke smFill" height="126" id="svg_16" width="280" x="0" y="0"/>
+    <text class="hand label ink" id="svg_17" x="56" y="80">SM131</text>
+   </g>
+   <path class="line" d="m300,316l0,108" id="svg_19"/>
+   <path class="line" d="m700,316l0,108" id="svg_20"/>
+   <path class="line" d="m1180,316l0,108" id="svg_21"/>
+   <path class="line" d="m300,424l880,0" id="svg_22"/>
+   <path class="arrow" d="m740,424l0,62" id="svg_23" transform="matrix(1 0 0 1 -39 0)"/>
+   <g id="svg_24" transform="matrix(1 0 0 1 341 491)">
+    <rect class="stroke l2Fill" height="150" id="svg_25" width="720" x="0" y="0"/>
+    <text class="hand label ink" id="svg_26" x="166" y="64">GPU-wide L2 cache</text>
+    <text class="hand body ink" id="svg_27" x="250" y="112">50 MB on H100</text>
+   </g>
+   <path class="arrow" d="m704,641l0,80" id="svg_28"/>
+   <text class="hand body ink" font-size="31" id="svg_29" x="739" y="695">HBM memory controllers / interface</text>
+   <g id="svg_30" transform="matrix(1 0 0 1 396 721)">
+    <rect class="stroke hbmFill" height="154" id="svg_31" width="620" x="0" y="0"/>
+    <text class="hand label ink" id="svg_32" x="118" y="68">HBM3 global memory</text>
+    <text class="hand body ink" id="svg_33" x="168" y="120">80 GB on H100 SXM5</text>
+   </g>
+  </g>
+  <g id="svg_34" transform="matrix(1 0 0 1 693 924)">
+   <path class="arrow" d="m0,0l0,94" id="svg_35"/>
+   <path class="arrow" d="m210,94l0,-94" id="svg_36"/>
+   <text class="hand body ink" id="svg_37" x="250" y="58">PCIe / host-device interconnect</text>
+  </g>
+  <g id="svg_38" transform="matrix(1 0 0 1 533 1020)">
+   <rect class="stroke cpuFill" height="100" id="svg_39" width="560" x="0" y="0"/>
+   <text class="hand label ink" id="svg_40" x="56" y="66">CPU</text>
+   <rect class="stroke paper" height="52" id="svg_41" width="220" x="250" y="24"/>
+   <text class="hand body ink" id="svg_42" x="286" y="62">host RAM</text>
+  </g>
+ </g>
+</svg>
