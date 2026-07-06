@@ -3,6 +3,9 @@
  <title id="title">H100 SM internal memory-side view</title>
  <desc id="desc">Hand-written style colored SVG showing one simplified H100 SM. Four scheduler/execution partitions have register files and LD/ST units connected by logical bidirectional load/store paths to a shared unified L1 data cache and shared-memory SRAM pool.</desc>
  <defs>
+  <marker id="arrow" markerHeight="5" markerWidth="5" orient="auto" refX="7" refY="4" viewBox="0 0 8 8">
+   <path d="M 0 0 L 8 4 L 0 8 z" fill="#111111"/>
+  </marker>
   <style>.paper { fill: #fbfcff; }
       .hand {
         font-family: &quot;Comic Sans MS&quot;, &quot;Bradley Hand&quot;, &quot;Marker Felt&quot;, &quot;Segoe Print&quot;, cursive;
@@ -43,16 +46,11 @@
       }
       .data-path {
         fill: none;
-        stroke: #303746;
-        stroke-width: 3;
-        stroke-linecap: round;
-      }
-      .arrow-tip {
-        fill: none;
-        stroke: #303746;
-        stroke-width: 3;
+        stroke: #111111;
+        stroke-width: 3.5;
         stroke-linecap: round;
         stroke-linejoin: round;
+        marker-end: url(#arrow);
       }
       .sketch {
         fill: none;
@@ -125,25 +123,21 @@
     <rect class="ldst" height="36" id="svg_51" rx="3" width="154" x="18" y="228"/>
     <text class="hand small white" id="svg_52" x="60" y="252">LD/ST</text>
    </g>
-   <g id="svg_54" transform="matrix(1 0 0 1 0 0) translate(125 482) scale(1 0.807692) translate(-125 -482)">
-    <line class="data-path" id="svg_55" x1="136" x2="136" y1="414" y2="472"/>
-    <path class="arrow-tip" d="m125,414l11,-10l11,10" id="svg_56"/>
-    <path class="arrow-tip" d="m125,472l11,10l11,-10" id="svg_57"/>
+   <g id="svg_54">
+    <path class="data-path" d="m127,426l0,52" id="svg_55"/>
+    <path class="data-path" d="m145,478l0,-52" id="svg_56"/>
    </g>
-   <g id="svg_58" transform="matrix(1 0 0 0.782051 0 105.051)">
-    <line class="data-path" id="svg_59" x1="366" x2="366" y1="414" y2="472"/>
-    <path class="arrow-tip" d="m355,414l11,-10l11,10" id="svg_60"/>
-    <path class="arrow-tip" d="m355,472l11,10l11,-10" id="svg_61"/>
+   <g id="svg_58">
+    <path class="data-path" d="m357,426l0,52" id="svg_59"/>
+    <path class="data-path" d="m375,478l0,-52" id="svg_60"/>
    </g>
-   <g id="svg_62" transform="matrix(1 0 0 0.820513 0 86.5128)">
-    <line class="data-path" id="svg_63" x1="596" x2="596" y1="414" y2="472"/>
-    <path class="arrow-tip" d="m585,414l11,-10l11,10" id="svg_64"/>
-    <path class="arrow-tip" d="m585,472l11,10l11,-10" id="svg_65"/>
+   <g id="svg_62">
+    <path class="data-path" d="m587,426l0,52" id="svg_63"/>
+    <path class="data-path" d="m605,478l0,-52" id="svg_64"/>
    </g>
-   <g id="svg_66" transform="matrix(1 0 0 0.807692 0 92.6923)">
-    <line class="data-path" id="svg_67" x1="819" x2="819" y1="414" y2="472"/>
-    <path class="arrow-tip" d="m808,414l11,-10l11,10" id="svg_68"/>
-    <path class="arrow-tip" d="m808,472l11,10l11,-10" id="svg_69"/>
+   <g id="svg_66">
+    <path class="data-path" d="m810,426l0,52" id="svg_67"/>
+    <path class="data-path" d="m828,478l0,-52" id="svg_68"/>
    </g>
    <g id="svg_70" transform="translate(74 488)">
     <rect class="l1" height="96" id="svg_71" rx="4" width="805" x="0" y="0"/>
@@ -152,10 +146,9 @@
     <text class="hand small white" id="svg_74" transform="matrix(1 0 0 1 -97 8)" x="180" y="61">L1 = hardware-managed cache</text>
     <text class="hand small white" id="svg_75" transform="matrix(1 0 0 1 -100 8)" x="468" y="61">SMEM = programmer-managed scratchpad</text>
    </g>
-   <g id="svg_76" transform="matrix(1 0 0 1.88095 0 -514.476)">
-    <line class="data-path" id="svg_77" x1="476" x2="476" y1="594" y2="616"/>
-    <path class="arrow-tip" d="m465,594l11,-10l11,10" id="svg_78"/>
-    <path class="arrow-tip" d="m465,616l11,10l11,-10" id="svg_79"/>
+   <g id="svg_76">
+    <path class="data-path" d="m468,596l0,30" id="svg_77"/>
+    <path class="data-path" d="m484,626l0,-30" id="svg_78"/>
    </g>
    <ellipse cx="554.5" cy="811" id="svg_84" rx="1" ry="0"/>
   </g>
