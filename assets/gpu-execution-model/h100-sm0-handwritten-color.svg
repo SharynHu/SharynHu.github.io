@@ -1,0 +1,168 @@
+<?xml version="1.0"?>
+<svg width="1060" height="760" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg">
+ <title id="title">H100 SM internal memory-side view</title>
+ <desc id="desc">Hand-written style colored SVG showing one simplified H100 SM. Four scheduler/execution partitions have register files and LD/ST units connected by logical bidirectional load/store paths to a shared unified L1 data cache and shared-memory SRAM pool.</desc>
+ <defs>
+  <style>.paper { fill: #fbfcff; }
+      .hand {
+        font-family: &quot;Comic Sans MS&quot;, &quot;Bradley Hand&quot;, &quot;Marker Felt&quot;, &quot;Segoe Print&quot;, cursive;
+      }
+      .ink { fill: #111827; }
+      .muted { fill: #4b5563; }
+      .white { fill: #ffffff; }
+      .title { font-size: 42px; font-weight: 700; }
+      .sub { font-size: 21px; font-weight: 600; }
+      .part-title { font-size: 24px; font-weight: 700; }
+      .label { font-size: 22px; font-weight: 700; }
+      .small { font-size: 17px; font-weight: 650; }
+      .tiny { font-size: 15px; font-weight: 650; }
+
+      .sm { fill: #d7efc6; stroke: #34552c; stroke-width: 4; }
+      .partition { fill: #fff8dc; stroke: #6b5f3b; stroke-width: 3; }
+      .sched { fill: #a9b3c2; stroke: #667080; stroke-width: 2.5; }
+      .register { fill: #79c7c6; stroke: #397f7d; stroke-width: 2.5; }
+      .ldst { fill: #efaaa7; stroke: #ad5b58; stroke-width: 2.5; }
+      .compute { fill: #f4c47d; stroke: #a66f25; stroke-width: 2.5; }
+      .l1 { fill: #a7b5f4; stroke: #6674c9; stroke-width: 3.5; }
+      .l2 { fill: #d8dcff; stroke: #6d74b8; stroke-width: 2.5; }
+      .note { fill: #fff4be; stroke: #8a7430; stroke-width: 2.5; }
+
+      .line {
+        fill: none;
+        stroke: #303746;
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .thin {
+        fill: none;
+        stroke: #303746;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .data-path {
+        fill: none;
+        stroke: #303746;
+        stroke-width: 3;
+        stroke-linecap: round;
+      }
+      .arrow-tip {
+        fill: none;
+        stroke: #303746;
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .sketch {
+        fill: none;
+        stroke: #111827;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        opacity: 0.18;
+      }</style>
+ </defs>
+ <g class="layer" display="inline">
+  <title>Layer 1</title>
+  <rect class="paper" height="760" id="svg_1" transform="scale(1 1.03816)" width="1060"/>
+  <g id="svg_2" transform="matrix(1 0 0 1 0 0) translate(54 44)">
+   <rect fill="#111827" height="630" id="svg_3" opacity="0.07" rx="6" width="952" x="8" y="10"/>
+   <rect class="sm" height="630" id="svg_4" rx="6" width="952" x="0" y="0"/>
+   <path class="sketch" d="m6,4l940,0l0,620l-941,0l1,-620z" id="svg_5"/>
+   <path class="sketch" d="m3,9l947,0l0,618l-942,0l-5,-618z" id="svg_6" transform="matrix(1 0 0 1 0 0)"/>
+   <text class="hand title ink" id="svg_7" x="38" y="60">H100 SM0: internal data path</text>
+   <text class="hand sub muted" id="svg_8" x="42" y="98">four partitions share one SM-local L1 / SMEM SRAM pool</text>
+   <g id="partition-0" transform="translate(34 136)">
+    <rect class="partition" height="280" id="svg_9" rx="4" width="205" x="0" y="0"/>
+    <path class="sketch" d="m4,3l197,0l0,273l-198,0l1,-273z" id="svg_10"/>
+    <text class="hand part-title ink" id="svg_11" x="42" y="34">partition 0</text>
+    <rect class="sched" height="45" id="svg_12" rx="3" width="165" x="20" y="54"/>
+    <text class="hand small white" id="svg_13" x="48" y="82">warp sched.</text>
+    <rect class="compute" height="45" id="svg_14" rx="3" width="165" x="20" y="112"/>
+    <text class="hand small ink" id="svg_15" x="40" y="140">tensor / ALU</text>
+    <rect class="register" height="45" id="svg_16" rx="3" width="165" x="20" y="170"/>
+    <text class="hand small white" id="svg_17" x="45" y="198">registers</text>
+    <rect class="ldst" height="36" id="svg_18" rx="3" width="165" x="20" y="228"/>
+    <text class="hand small white" id="svg_19" x="68" y="252">LD/ST</text>
+   </g>
+   <g id="partition-1" transform="translate(264 136)">
+    <rect class="partition" height="280" id="svg_20" rx="4" width="205" x="0" y="0"/>
+    <path class="sketch" d="m3,4l197,0l0,272l-196,0l-1,-272z" id="svg_21"/>
+    <text class="hand part-title ink" id="svg_22" x="44" y="34">partition 1</text>
+    <rect class="sched" height="45" id="svg_23" rx="3" width="165" x="20" y="54"/>
+    <text class="hand small white" id="svg_24" x="48" y="82">warp sched.</text>
+    <rect class="compute" height="45" id="svg_25" rx="3" width="165" x="20" y="112"/>
+    <text class="hand small ink" id="svg_26" x="40" y="140">tensor / ALU</text>
+    <rect class="register" height="45" id="svg_27" rx="3" width="165" x="20" y="170"/>
+    <text class="hand small white" id="svg_28" x="45" y="198">registers</text>
+    <rect class="ldst" height="36" id="svg_29" rx="3" width="165" x="20" y="228"/>
+    <text class="hand small white" id="svg_30" x="68" y="252">LD/ST</text>
+   </g>
+   <g id="partition-2" transform="translate(494 136)">
+    <rect class="partition" height="280" id="svg_31" rx="4" width="205" x="0" y="0"/>
+    <path class="sketch" d="m5,4l196,0l0,271l-198,0l2,-271z" id="svg_32"/>
+    <text class="hand part-title ink" id="svg_33" x="43" y="34">partition 2</text>
+    <rect class="sched" height="45" id="svg_34" rx="3" width="165" x="20" y="54"/>
+    <text class="hand small white" id="svg_35" x="48" y="82">warp sched.</text>
+    <rect class="compute" height="45" id="svg_36" rx="3" width="165" x="20" y="112"/>
+    <text class="hand small ink" id="svg_37" x="40" y="140">tensor / ALU</text>
+    <rect class="register" height="45" id="svg_38" rx="3" width="165" x="20" y="170"/>
+    <text class="hand small white" id="svg_39" x="45" y="198">registers</text>
+    <rect class="ldst" height="36" id="svg_40" rx="3" width="165" x="20" y="228"/>
+    <text class="hand small white" id="svg_41" x="68" y="252">LD/ST</text>
+   </g>
+   <g id="partition-3" transform="translate(724 136)">
+    <rect class="partition" height="280" id="svg_42" rx="4" width="190" x="0" y="0"/>
+    <path class="sketch" d="m4,3l182,0l0,273l-182,0l0,-273z" id="svg_43"/>
+    <text class="hand part-title ink" id="svg_44" x="34" y="34">partition 3</text>
+    <rect class="sched" height="45" id="svg_45" rx="3" width="154" x="18" y="54"/>
+    <text class="hand small white" id="svg_46" x="42" y="82">warp sched.</text>
+    <rect class="compute" height="45" id="svg_47" rx="3" width="154" x="18" y="112"/>
+    <text class="hand small ink" id="svg_48" x="34" y="140">tensor / ALU</text>
+    <rect class="register" height="45" id="svg_49" rx="3" width="154" x="18" y="170"/>
+    <text class="hand small white" id="svg_50" x="39" y="198">registers</text>
+    <rect class="ldst" height="36" id="svg_51" rx="3" width="154" x="18" y="228"/>
+    <text class="hand small white" id="svg_52" x="60" y="252">LD/ST</text>
+   </g>
+   <g id="svg_54" transform="matrix(1 0 0 1 0 0) translate(125 482) scale(1 0.807692) translate(-125 -482)">
+    <line class="data-path" id="svg_55" x1="136" x2="136" y1="414" y2="472"/>
+    <path class="arrow-tip" d="m125,414l11,-10l11,10" id="svg_56"/>
+    <path class="arrow-tip" d="m125,472l11,10l11,-10" id="svg_57"/>
+   </g>
+   <g id="svg_58" transform="matrix(1 0 0 0.782051 0 105.051)">
+    <line class="data-path" id="svg_59" x1="366" x2="366" y1="414" y2="472"/>
+    <path class="arrow-tip" d="m355,414l11,-10l11,10" id="svg_60"/>
+    <path class="arrow-tip" d="m355,472l11,10l11,-10" id="svg_61"/>
+   </g>
+   <g id="svg_62" transform="matrix(1 0 0 0.820513 0 86.5128)">
+    <line class="data-path" id="svg_63" x1="596" x2="596" y1="414" y2="472"/>
+    <path class="arrow-tip" d="m585,414l11,-10l11,10" id="svg_64"/>
+    <path class="arrow-tip" d="m585,472l11,10l11,-10" id="svg_65"/>
+   </g>
+   <g id="svg_66" transform="matrix(1 0 0 0.807692 0 92.6923)">
+    <line class="data-path" id="svg_67" x1="819" x2="819" y1="414" y2="472"/>
+    <path class="arrow-tip" d="m808,414l11,-10l11,10" id="svg_68"/>
+    <path class="arrow-tip" d="m808,472l11,10l11,-10" id="svg_69"/>
+   </g>
+   <g id="svg_70" transform="translate(74 488)">
+    <rect class="l1" height="96" id="svg_71" rx="4" width="805" x="0" y="0"/>
+    <path class="sketch" d="m4,4l796,0l0,87l-797,0l1,-87z" id="svg_72"/>
+    <text class="hand label white" id="svg_73" x="184" y="33">Unified L1 data cache / shared memory SRAM</text>
+    <text class="hand small white" id="svg_74" transform="matrix(1 0 0 1 -97 8)" x="180" y="61">L1 = hardware-managed cache</text>
+    <text class="hand small white" id="svg_75" transform="matrix(1 0 0 1 -100 8)" x="468" y="61">SMEM = programmer-managed scratchpad</text>
+   </g>
+   <g id="svg_76" transform="matrix(1 0 0 1.88095 0 -514.476)">
+    <line class="data-path" id="svg_77" x1="476" x2="476" y1="594" y2="616"/>
+    <path class="arrow-tip" d="m465,594l11,-10l11,10" id="svg_78"/>
+    <path class="arrow-tip" d="m465,616l11,10l11,-10" id="svg_79"/>
+   </g>
+   <ellipse cx="554.5" cy="811" id="svg_84" rx="1" ry="0"/>
+  </g>
+  <g id="svg_80" transform="matrix(1 0 0 1 254 709)">
+   <rect class="l2" height="48" id="svg_81" rx="4" width="550" x="0" y="0"/>
+   <path class="sketch" d="m4,3l542,0l0,41l-542,0l0,-41z" id="svg_82"/>
+   <text class="hand small ink" id="svg_83" x="118" y="31">to GPU-wide L2 cache, then HBM3 global memory</text>
+  </g>
+ </g>
+</svg>
